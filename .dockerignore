@@ -1,0 +1,22 @@
+# Secrets - NEVER bake these into the image (Keep the private key out!)
+.env
+cosign.key
+
+# Local generated data
+reports/
+.git/
+.quarto/
+.ipynb_checkpoints/
+discussions/
+.venv/
+__pycache__/
+quindecagon.egg-info/
+
+# Documentation
+*.md
+installations.md
+
+# Metadata & Build
+.gitignore
+Dockerfile
+.DS_Store
