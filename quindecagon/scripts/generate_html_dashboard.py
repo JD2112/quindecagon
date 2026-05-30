@@ -11,19 +11,21 @@ def load_json(filepath):
     if not os.path.exists(filepath):
         return None
     try:
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             return json.load(f)
     except Exception:
         return None
+
 
 def load_text(filepath):
     if not os.path.exists(filepath):
         return ""
     try:
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
             return f.read()
     except Exception:
         return ""
+
 
 def generate_dashboard(raw_dir, output_html):
     # ---------------------------------------------------------
@@ -38,14 +40,20 @@ def generate_dashboard(raw_dir, output_html):
         try:
             m_data = load_json(metadata_path)
             if m_data:
-                pipeline_name = m_data.get('pipeline_name', pipeline_name)
-                pipeline_path = m_data.get('pipeline_path', pipeline_path)
-                run_command = m_data.get('run_command', run_command)
+                pipeline_name = m_data.get("pipeline_name", pipeline_name)
+                pipeline_path = m_data.get("pipeline_path", pipeline_path)
+                run_command = m_data.get("run_command", run_command)
         except Exception:
             pass
 
     # Escape HTML characters for the command string
-    esc_run_command = run_command.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&#x27;")
+    esc_run_command = (
+        run_command.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#x27;")
+    )
 
     data = {
         "timestamp": datetime.now().strftime("%B %d, %Y at %H:%M:%S"),
@@ -59,165 +67,179 @@ def generate_dashboard(raw_dir, output_html):
             "total_critical_cves": 0,
             "total_high_cves": 0,
             "secrets_found": 0,
-            "sast_issues": 0
+            "sast_issues": 0,
         },
         "containers": [],
         "secrets": [],
-        "sast": []
+        "sast": [],
     }
 
     # Gather all raw files to embed directly in the HTML for the Raw Diagnostics Log & JSON Explorer
     raw_files_embedded = {}
 
-    for f_path in glob.glob(os.path.join(raw_dir, '*')):
+    for f_path in glob.glob(os.path.join(raw_dir, "*")):
         filename = os.path.basename(f_path)
         # Exclude extremely heavy raw JSON files from the embedded log explorer to avoid freezing the browser.
         # This keeps the final HTML cockpit extremely lightweight (< 1MB) and highly responsive.
-        if filename.startswith(('sbom_', 'snyk_', 'grype_', 'trivy_')) and filename.endswith('.json'):
+        if filename.startswith(
+            ("sbom_", "snyk_", "grype_", "trivy_")
+        ) and filename.endswith(".json"):
             continue
-        if filename == 'r_audit_raw.json':
+        if filename == "r_audit_raw.json":
             continue
-        if f_path.endswith('.json'):
+        if f_path.endswith(".json"):
             content = load_json(f_path)
             if content is not None:
                 raw_files_embedded[filename] = content
-        elif f_path.endswith(('.txt', '.log')):
+        elif f_path.endswith((".txt", ".log")):
             raw_files_embedded[filename] = load_text(f_path)
 
     # Secrets (Gitleaks)
-    gl = load_json(os.path.join(raw_dir, 'gitleaks.json'))
-    gl_findings = load_json(os.path.join(raw_dir, 'gitleaks_findings.json'))
-    
+    gl = load_json(os.path.join(raw_dir, "gitleaks.json"))
+    gl_findings = load_json(os.path.join(raw_dir, "gitleaks_findings.json"))
+
     if gl:
-        raw_files_embedded['gitleaks.json'] = gl
+        raw_files_embedded["gitleaks.json"] = gl
     if gl_findings:
-        raw_files_embedded['gitleaks_findings.json'] = gl_findings
+        raw_files_embedded["gitleaks_findings.json"] = gl_findings
         for leak in gl_findings:
-            data['secrets'].append({
-                "file": leak.get('File', 'Unknown'),
-                "line": leak.get('StartLine', 0),
-                "rule": leak.get('Description', 'Secret Pattern'),
-                "match": leak.get('Match', '***')
-            })
-            data['metrics']['secrets_found'] += 1
+            data["secrets"].append(
+                {
+                    "file": leak.get("File", "Unknown"),
+                    "line": leak.get("StartLine", 0),
+                    "rule": leak.get("Description", "Secret Pattern"),
+                    "match": leak.get("Match", "***"),
+                }
+            )
+            data["metrics"]["secrets_found"] += 1
 
     # Python SAST (Bandit)
-    bandit = load_json(os.path.join(raw_dir, 'bandit.json'))
+    bandit = load_json(os.path.join(raw_dir, "bandit.json"))
     if bandit:
-        raw_files_embedded['bandit.json'] = bandit
-        if 'results' in bandit:
-            for res in bandit['results']:
-                data['sast'].append({
-                    "tool": "Bandit (Python)",
-                    "file": res.get('filename', ''),
-                    "line": res.get('line_number', 0),
-                    "severity": res.get('issue_severity', 'MEDIUM'),
-                    "description": res.get('issue_text', '')
-                })
-                data['metrics']['sast_issues'] += 1
+        raw_files_embedded["bandit.json"] = bandit
+        if "results" in bandit:
+            for res in bandit["results"]:
+                data["sast"].append(
+                    {
+                        "tool": "Bandit (Python)",
+                        "file": res.get("filename", ""),
+                        "line": res.get("line_number", 0),
+                        "severity": res.get("issue_severity", "MEDIUM"),
+                        "description": res.get("issue_text", ""),
+                    }
+                )
+                data["metrics"]["sast_issues"] += 1
 
     # Python Flake8
-    flake8 = load_json(os.path.join(raw_dir, 'flake8.json'))
+    flake8 = load_json(os.path.join(raw_dir, "flake8.json"))
     if flake8:
-        raw_files_embedded['flake8.json'] = flake8
+        raw_files_embedded["flake8.json"] = flake8
 
     # Python Formatting (Black)
-    black = load_json(os.path.join(raw_dir, 'black.json'))
-    black_raw = load_text(os.path.join(raw_dir, 'black_raw.txt'))
+    black = load_json(os.path.join(raw_dir, "black.json"))
+    black_raw = load_text(os.path.join(raw_dir, "black_raw.txt"))
     if black:
-        raw_files_embedded['black.json'] = black
-        status = black.get('status', 'unknown')
-        unformatted = black.get('unformatted_files', 0)
-        if status == 'warning':
-            data['sast'].append({
-                "tool": "Black (Python)",
-                "file": "Python Files",
-                "line": "N/A",
-                "severity": "WARNING",
-                "description": f"Black found {unformatted} unformatted Python script(s). Format checking failed."
-            })
-            data['metrics']['sast_issues'] += 1
+        raw_files_embedded["black.json"] = black
+        status = black.get("status", "unknown")
+        unformatted = black.get("unformatted_files", 0)
+        if status == "warning":
+            data["sast"].append(
+                {
+                    "tool": "Black (Python)",
+                    "file": "Python Files",
+                    "line": "N/A",
+                    "severity": "WARNING",
+                    "description": f"Black found {unformatted} unformatted Python script(s). Format checking failed.",
+                }
+            )
+            data["metrics"]["sast_issues"] += 1
     if black_raw:
-        raw_files_embedded['black_raw.txt'] = black_raw
+        raw_files_embedded["black_raw.txt"] = black_raw
 
     # R SAST (Lintr / oysteR)
-    r_audit = load_json(os.path.join(raw_dir, 'r_audit_raw.json'))
-    r_summary = load_json(os.path.join(raw_dir, 'r_audit.json'))
-    
+    r_audit = load_json(os.path.join(raw_dir, "r_audit_raw.json"))
+    r_summary = load_json(os.path.join(raw_dir, "r_audit.json"))
+
     if r_summary:
-        raw_files_embedded['r_audit.json'] = r_summary
+        raw_files_embedded["r_audit.json"] = r_summary
     if r_audit:
-        raw_files_embedded['r_audit_raw.json'] = r_audit
-        for lint in r_audit.get('linters', []):
-            data['sast'].append({
-                "tool": "lintr (R)",
-                "file": lint.get('filename', ''),
-                "line": lint.get('line_number', 0),
-                "severity": "WARNING",
-                "description": lint.get('message', '')
-            })
-            data['metrics']['sast_issues'] += 1
-        for vuln in r_audit.get('vulnerabilities', []):
-            data['sast'].append({
-                "tool": "oysteR (R Deps)",
-                "file": vuln.get('package', ''),
-                "line": vuln.get('version', ''),
-                "severity": "HIGH",
-                "description": vuln.get('description', 'Vulnerable Dependency')
-            })
-            data['metrics']['sast_issues'] += 1
+        raw_files_embedded["r_audit_raw.json"] = r_audit
+        for lint in r_audit.get("linters", []):
+            data["sast"].append(
+                {
+                    "tool": "lintr (R)",
+                    "file": lint.get("filename", ""),
+                    "line": lint.get("line_number", 0),
+                    "severity": "WARNING",
+                    "description": lint.get("message", ""),
+                }
+            )
+            data["metrics"]["sast_issues"] += 1
+        for vuln in r_audit.get("vulnerabilities", []):
+            data["sast"].append(
+                {
+                    "tool": "oysteR (R Deps)",
+                    "file": vuln.get("package", ""),
+                    "line": vuln.get("version", ""),
+                    "severity": "HIGH",
+                    "description": vuln.get("description", "Vulnerable Dependency"),
+                }
+            )
+            data["metrics"]["sast_issues"] += 1
 
     # R Audit Log
-    r_audit_log = load_text(os.path.join(raw_dir, 'r_audit.log'))
+    r_audit_log = load_text(os.path.join(raw_dir, "r_audit.log"))
     if r_audit_log:
-        raw_files_embedded['r_audit.log'] = r_audit_log
+        raw_files_embedded["r_audit.log"] = r_audit_log
 
     # Pipeline SAST (Semgrep)
-    semgrep_raw = load_json(os.path.join(raw_dir, 'semgrep_raw.json'))
+    semgrep_raw = load_json(os.path.join(raw_dir, "semgrep_raw.json"))
     if semgrep_raw:
-        if 'results' in semgrep_raw:
-            for res in semgrep_raw['results']:
-                data['sast'].append({
-                    "tool": "Semgrep (Nextflow)",
-                    "file": res.get('path', ''),
-                    "line": res.get('start', {}).get('line', 0),
-                    "severity": "HIGH",
-                    "description": res.get('extra', {}).get('message', '')
-                })
-                data['metrics']['sast_issues'] += 1
+        if "results" in semgrep_raw:
+            for res in semgrep_raw["results"]:
+                data["sast"].append(
+                    {
+                        "tool": "Semgrep (Nextflow)",
+                        "file": res.get("path", ""),
+                        "line": res.get("start", {}).get("line", 0),
+                        "severity": "HIGH",
+                        "description": res.get("extra", {}).get("message", ""),
+                    }
+                )
+                data["metrics"]["sast_issues"] += 1
 
     # Nextflow Config Validation
-    nf_config = load_json(os.path.join(raw_dir, 'nf_config_validation.json'))
-    nf_config_txt = load_text(os.path.join(raw_dir, 'nf_config_validation.txt'))
+    nf_config = load_json(os.path.join(raw_dir, "nf_config_validation.json"))
+    nf_config_txt = load_text(os.path.join(raw_dir, "nf_config_validation.txt"))
     if nf_config:
-        raw_files_embedded['nf_config_validation.json'] = nf_config
+        raw_files_embedded["nf_config_validation.json"] = nf_config
     if nf_config_txt:
-        raw_files_embedded['nf_config_validation.txt'] = nf_config_txt
+        raw_files_embedded["nf_config_validation.txt"] = nf_config_txt
 
     # Reproducibility
-    repro = load_json(os.path.join(raw_dir, 'reproducibility.json'))
+    repro = load_json(os.path.join(raw_dir, "reproducibility.json"))
     if repro:
-        raw_files_embedded['reproducibility.json'] = repro
+        raw_files_embedded["reproducibility.json"] = repro
 
     # Provenance
-    provenance = load_json(os.path.join(raw_dir, 'provenance.json'))
+    provenance = load_json(os.path.join(raw_dir, "provenance.json"))
     if provenance:
-        raw_files_embedded['provenance.json'] = provenance
+        raw_files_embedded["provenance.json"] = provenance
 
     # nfcore_lint
-    nfcore_lint = load_json(os.path.join(raw_dir, 'nfcore_lint.json'))
+    nfcore_lint = load_json(os.path.join(raw_dir, "nfcore_lint.json"))
     if nfcore_lint:
-        raw_files_embedded['nfcore_lint.json'] = nfcore_lint
+        raw_files_embedded["nfcore_lint.json"] = nfcore_lint
 
     # Container Scans
-    trivy_files = glob.glob(os.path.join(raw_dir, 'trivy_*.json'))
-    data['metrics']['total_images'] = len(trivy_files)
+    trivy_files = glob.glob(os.path.join(raw_dir, "trivy_*.json"))
+    data["metrics"]["total_images"] = len(trivy_files)
 
     for tf in trivy_files:
-        base_name = os.path.basename(tf).replace('trivy_', '').replace('.json', '')
-        display_name = base_name.replace('_', '/')
-        if display_name.count('/') > 2:
-            parts = display_name.rsplit('/', 1)
+        base_name = os.path.basename(tf).replace("trivy_", "").replace(".json", "")
+        display_name = base_name.replace("_", "/")
+        if display_name.count("/") > 2:
+            parts = display_name.rsplit("/", 1)
             display_name = parts[0] + ":" + parts[1]
 
         t_data = load_json(tf)
@@ -226,118 +248,135 @@ def generate_dashboard(raw_dir, output_html):
         top_cves = []
 
         if t_data:
-            raw_files_embedded[f'trivy_{base_name}.json'] = t_data
-            if 'Results' in t_data:
-                for res in t_data.get('Results', []):
-                    for v in res.get('Vulnerabilities', []):
-                        sev = v.get('Severity', 'UNKNOWN')
-                        if sev == 'CRITICAL': crit_count += 1
-                        if sev == 'HIGH': high_count += 1
-                        
-                        if sev in ['CRITICAL', 'HIGH'] and len(top_cves) < 3:
-                            top_cves.append(f"{v.get('VulnerabilityID')} ({v.get('PkgName')})")
+            raw_files_embedded[f"trivy_{base_name}.json"] = t_data
+            if "Results" in t_data:
+                for res in t_data.get("Results", []):
+                    for v in res.get("Vulnerabilities", []):
+                        sev = v.get("Severity", "UNKNOWN")
+                        if sev == "CRITICAL":
+                            crit_count += 1
+                        if sev == "HIGH":
+                            high_count += 1
 
-        data['metrics']['total_critical_cves'] += crit_count
-        data['metrics']['total_high_cves'] += high_count
+                        if sev in ["CRITICAL", "HIGH"] and len(top_cves) < 3:
+                            top_cves.append(
+                                f"{v.get('VulnerabilityID')} ({v.get('PkgName')})"
+                            )
+
+        data["metrics"]["total_critical_cves"] += crit_count
+        data["metrics"]["total_high_cves"] += high_count
 
         # Docker Scout cves
         scout_crit = 0
         scout_high = 0
-        scout_path = os.path.join(raw_dir, f'docker_scout_{base_name}_cves.json')
+        scout_path = os.path.join(raw_dir, f"docker_scout_{base_name}_cves.json")
         scout_data = load_json(scout_path)
         if scout_data:
-            raw_files_embedded[f'docker_scout_{base_name}_cves.json'] = scout_data
+            raw_files_embedded[f"docker_scout_{base_name}_cves.json"] = scout_data
             # Let's count scout critical & high from SARIF
             rules_map = {}
-            for run in scout_data.get('runs', []):
-                driver = run.get('tool', {}).get('driver', {})
-                for rule in driver.get('rules', []):
-                    rule_id = rule.get('id')
+            for run in scout_data.get("runs", []):
+                driver = run.get("tool", {}).get("driver", {})
+                for rule in driver.get("rules", []):
+                    rule_id = rule.get("id")
                     if rule_id:
                         rules_map[rule_id] = rule
-                
-                for res in run.get('results', []):
-                    rule_id = res.get('ruleId')
+
+                for res in run.get("results", []):
+                    rule_id = res.get("ruleId")
                     rule = rules_map.get(rule_id, {}) if rule_id else {}
-                    
+
                     severity = None
-                    tags = rule.get('properties', {}).get('tags', [])
+                    tags = rule.get("properties", {}).get("tags", [])
                     for t in tags:
-                        if 'severity:' in t.lower():
-                            parts = t.split(':')
+                        if "severity:" in t.lower():
+                            parts = t.split(":")
                             if len(parts) > 1:
                                 severity = parts[1].strip().upper()
                                 break
-                    
+
                     if not severity:
-                        severity = res.get('properties', {}).get('cvssv3_severity')
+                        severity = res.get("properties", {}).get("cvssv3_severity")
                     if not severity:
-                        severity = rule.get('properties', {}).get('cvssv3_severity')
+                        severity = rule.get("properties", {}).get("cvssv3_severity")
                     if not severity:
-                        cvss = res.get('properties', {}).get('cvssv3_score') or rule.get('properties', {}).get('cvssv3_score')
+                        cvss = res.get("properties", {}).get(
+                            "cvssv3_score"
+                        ) or rule.get("properties", {}).get("cvssv3_score")
                         if cvss:
                             try:
                                 score = float(cvss)
-                                if score >= 9.0: severity = 'CRITICAL'
-                                elif score >= 7.0: severity = 'HIGH'
-                            except: pass
+                                if score >= 9.0:
+                                    severity = "CRITICAL"
+                                elif score >= 7.0:
+                                    severity = "HIGH"
+                            except:
+                                pass
                     if not severity:
-                        level = res.get('level', 'warning').lower()
-                        if level == 'error': severity = 'HIGH'
-                    
+                        level = res.get("level", "warning").lower()
+                        if level == "error":
+                            severity = "HIGH"
+
                     if severity:
-                        if 'CRIT' in severity.upper():
+                        if "CRIT" in severity.upper():
                             scout_crit += 1
-                        elif 'HIGH' in severity.upper():
+                        elif "HIGH" in severity.upper():
                             scout_high += 1
 
         # Check actual generated SBOM file path and pattern
-        sbom_path = os.path.join(raw_dir, f'sbom_{base_name}.spdx.json')
+        sbom_path = os.path.join(raw_dir, f"sbom_{base_name}.spdx.json")
         has_sbom = os.path.exists(sbom_path)
         if has_sbom:
-            data['metrics']['sbom_images'] += 1
+            data["metrics"]["sbom_images"] += 1
             # Embed a tiny metadata descriptor instead of the 20MB raw JSON tree to optimize weight
-            raw_files_embedded[f'sbom_{base_name}.spdx.json'] = {
+            raw_files_embedded[f"sbom_{base_name}.spdx.json"] = {
                 "status": "SBOM manifest generated successfully.",
                 "size_bytes": os.path.getsize(sbom_path),
-                "format": "SPDX JSON"
+                "format": "SPDX JSON",
             }
 
         # Check actual generated Cosign file path and verification text
-        cosign_path = os.path.join(raw_dir, f'cosign_{base_name}.txt')
+        cosign_path = os.path.join(raw_dir, f"cosign_{base_name}.txt")
         has_cosign = False
         cosign_content = ""
         if os.path.exists(cosign_path):
             cosign_content = load_text(cosign_path)
             if "Verification for" in cosign_content and "Error" not in cosign_content:
                 has_cosign = True
-                data['metrics']['signed_images'] += 1
-            raw_files_embedded[f'cosign_{base_name}.txt'] = cosign_content
+                data["metrics"]["signed_images"] += 1
+            raw_files_embedded[f"cosign_{base_name}.txt"] = cosign_content
 
-        data['containers'].append({
-            "name": display_name,
-            "critical": crit_count,
-            "high": high_count,
-            "scout_critical": scout_crit,
-            "scout_high": scout_high,
-            "sbom": has_sbom,
-            "signed": has_cosign,
-            "top_cves": top_cves
-        })
+        data["containers"].append(
+            {
+                "name": display_name,
+                "critical": crit_count,
+                "high": high_count,
+                "scout_critical": scout_crit,
+                "scout_high": scout_high,
+                "sbom": has_sbom,
+                "signed": has_cosign,
+                "top_cves": top_cves,
+            }
+        )
 
     # Sort containers by critical/high vulnerabilities
-    data['containers'].sort(key=lambda x: (x['critical'], x['high']), reverse=True)
+    data["containers"].sort(key=lambda x: (x["critical"], x["high"]), reverse=True)
 
     # Compute dynamic cryptographic fingerprint for report integrity using raw directory files
     def generate_report_fingerprint(r_dir):
         try:
             import hashlib
             import glob
+
             files = sorted(glob.glob(os.path.join(r_dir, "*")))
             hasher = hashlib.sha256()
             for fpath in files:
-                if os.path.isfile(fpath) and not fpath.endswith('report.html') and not fpath.endswith('report.pdf'):
-                    with open(fpath, 'rb') as f:
+                if (
+                    os.path.isfile(fpath)
+                    and not fpath.endswith("report.html")
+                    and not fpath.endswith("report.pdf")
+                ):
+                    with open(fpath, "rb") as f:
                         hasher.update(f.read())
             return hasher.hexdigest()
         except Exception:
@@ -351,13 +390,17 @@ def generate_dashboard(raw_dir, output_html):
         if not os.path.exists(path):
             return "Not Run"
         try:
-            with open(path, 'r') as f:
+            with open(path, "r") as f:
                 d = json.load(f)
-                status = d.get('status', 'unknown')
-                if status == 'passed': return 'Passed'
-                elif status == 'failed': return 'Failed'
-                elif status == 'warning': return 'Warning'
-                elif status == 'skipped': return 'Skipped'
+                status = d.get("status", "unknown")
+                if status == "passed":
+                    return "Passed"
+                elif status == "failed":
+                    return "Failed"
+                elif status == "warning":
+                    return "Warning"
+                elif status == "skipped":
+                    return "Skipped"
                 return status.capitalize()
         except:
             return "Skipped"
@@ -367,16 +410,45 @@ def generate_dashboard(raw_dir, output_html):
     gitleaks_findings_path = os.path.join(raw_dir, "gitleaks_findings.json")
     if os.path.exists(gitleaks_findings_path):
         try:
-            with open(gitleaks_findings_path, 'r') as f:
+            with open(gitleaks_findings_path, "r") as f:
                 findings = json.load(f)
                 seen = set()
                 active_leaks = 0
-                binary_or_report_exts = ('.png', '.jpg', '.jpeg', '.gif', '.pdf', '.zip', '.tar', '.gz', '.bam', '.sam', '.bai', '.fastq', '.fq', '.vcf', '.qmd', '.html', '.css', '.svg', '.webp', '.lock')
+                binary_or_report_exts = (
+                    ".png",
+                    ".jpg",
+                    ".jpeg",
+                    ".gif",
+                    ".pdf",
+                    ".zip",
+                    ".tar",
+                    ".gz",
+                    ".bam",
+                    ".sam",
+                    ".bai",
+                    ".fastq",
+                    ".fq",
+                    ".vcf",
+                    ".qmd",
+                    ".html",
+                    ".css",
+                    ".svg",
+                    ".webp",
+                    ".lock",
+                )
                 for r in findings:
-                    filepath = r.get('File', '')
-                    if filepath.lower().endswith(binary_or_report_exts) or 'reports/' in filepath or 'report-check/' in filepath or '.git/' in filepath or 'docs/' in filepath or 'site/' in filepath or 'containers/docker/' in filepath:
+                    filepath = r.get("File", "")
+                    if (
+                        filepath.lower().endswith(binary_or_report_exts)
+                        or "reports/" in filepath
+                        or "report-check/" in filepath
+                        or ".git/" in filepath
+                        or "docs/" in filepath
+                        or "site/" in filepath
+                        or "containers/docker/" in filepath
+                    ):
                         continue
-                    key = (filepath, r.get('StartLine', ''), r.get('RuleID', ''))
+                    key = (filepath, r.get("StartLine", ""), r.get("RuleID", ""))
                     if key not in seen:
                         seen.add(key)
                         active_leaks += 1
@@ -404,17 +476,25 @@ def generate_dashboard(raw_dir, output_html):
     riskmetric_status = "Not Run"
     if os.path.exists(r_path):
         try:
-            with open(r_path, 'r') as f:
+            with open(r_path, "r") as f:
                 r_data = json.load(f)
-                linters = r_data.get('linters', [])
-                lint_count = len(linters) if isinstance(linters, list) else r_data.get('lint_count', 0)
+                linters = r_data.get("linters", [])
+                lint_count = (
+                    len(linters)
+                    if isinstance(linters, list)
+                    else r_data.get("lint_count", 0)
+                )
                 lintr_status = "Passed" if lint_count == 0 else "Warning"
-                
-                vulns = r_data.get('vulnerabilities', [])
-                vuln_count = len(vulns) if isinstance(vulns, list) else r_data.get('vuln_count', 0)
+
+                vulns = r_data.get("vulnerabilities", [])
+                vuln_count = (
+                    len(vulns)
+                    if isinstance(vulns, list)
+                    else r_data.get("vuln_count", 0)
+                )
                 oyster_status = "Passed" if vuln_count == 0 else "Failed"
-                
-                risks = r_data.get('risks', [])
+
+                risks = r_data.get("risks", [])
                 risk_count = len(risks) if isinstance(risks, list) else 0
                 riskmetric_status = "Passed" if risk_count == 0 else "Warning"
         except:
@@ -423,14 +503,16 @@ def generate_dashboard(raw_dir, output_html):
     r_json_path = os.path.join(raw_dir, "r_audit.json")
     if os.path.exists(r_json_path):
         try:
-            with open(r_json_path, 'r') as f:
+            with open(r_json_path, "r") as f:
                 r_data = json.load(f)
-                if r_data.get('status') == 'skipped':
+                if r_data.get("status") == "skipped":
                     lintr_status = oyster_status = riskmetric_status = "Skipped"
         except:
             pass
 
-    has_r_manifest = os.path.exists("/target/renv.lock") or os.path.exists("/target/DESCRIPTION")
+    has_r_manifest = os.path.exists("/target/renv.lock") or os.path.exists(
+        "/target/DESCRIPTION"
+    )
     if not has_r_manifest and lintr_status not in ["Skipped", "Not Run"]:
         oyster_status = "Skipped"
         riskmetric_status = "Skipped"
@@ -443,18 +525,28 @@ def generate_dashboard(raw_dir, output_html):
     snyk_status = "Not Run"
     grype_status = "Not Run"
 
-    if data['containers']:
-        trivy_status = "Failed" if any(c['critical'] > 0 for c in data['containers']) else "Passed"
-        scout_status = "Failed" if any(c['scout_critical'] > 0 for c in data['containers']) else "Passed"
-        syft_status = "Passed" if all(c['sbom'] for c in data['containers']) else "Failed"
-        cosign_status = "Passed" if all(c['signed'] for c in data['containers']) else "Failed"
-        
+    if data["containers"]:
+        trivy_status = (
+            "Failed" if any(c["critical"] > 0 for c in data["containers"]) else "Passed"
+        )
+        scout_status = (
+            "Failed"
+            if any(c["scout_critical"] > 0 for c in data["containers"])
+            else "Passed"
+        )
+        syft_status = (
+            "Passed" if all(c["sbom"] for c in data["containers"]) else "Failed"
+        )
+        cosign_status = (
+            "Passed" if all(c["signed"] for c in data["containers"]) else "Failed"
+        )
+
         # Snyk Check
         snyk_status = "Passed"
         snyk_json_path = os.path.join(raw_dir, "snyk.json")
         if os.path.exists(snyk_json_path):
             s_data = load_json(snyk_json_path)
-            if s_data and s_data.get('status') == 'skipped':
+            if s_data and s_data.get("status") == "skipped":
                 snyk_status = "Skipped"
         if snyk_status != "Skipped":
             snyk_failed = False
@@ -465,18 +557,22 @@ def generate_dashboard(raw_dir, output_html):
                 for sf in snyk_files:
                     s_data = load_json(sf)
                     if s_data:
-                        vulns = s_data.get('vulnerabilities', []) if isinstance(s_data, dict) else []
+                        vulns = (
+                            s_data.get("vulnerabilities", [])
+                            if isinstance(s_data, dict)
+                            else []
+                        )
                         for v in vulns:
-                            if v.get('severity', '').upper() == 'CRITICAL':
+                            if v.get("severity", "").upper() == "CRITICAL":
                                 snyk_failed = True
                 snyk_status = "Failed" if snyk_failed else "Passed"
-        
+
         # Grype Check
         grype_status = "Passed"
         syft_grype_json = os.path.join(raw_dir, "syft_grype.json")
         if os.path.exists(syft_grype_json):
             sg_data = load_json(syft_grype_json)
-            if sg_data and sg_data.get('status') == 'skipped':
+            if sg_data and sg_data.get("status") == "skipped":
                 grype_status = "Skipped"
         if grype_status != "Skipped":
             grype_failed = False
@@ -487,45 +583,63 @@ def generate_dashboard(raw_dir, output_html):
                 for gf in grype_files:
                     g_data = load_json(gf)
                     if g_data:
-                        for match in g_data.get('matches', []):
-                            if match.get('vulnerability', {}).get('severity', '').upper() == 'CRITICAL':
+                        for match in g_data.get("matches", []):
+                            if (
+                                match.get("vulnerability", {})
+                                .get("severity", "")
+                                .upper()
+                                == "CRITICAL"
+                            ):
                                 grype_failed = True
                 grype_status = "Failed" if grype_failed else "Passed"
 
     # Domains definition
     domain_tools = {
-        'A': [
-            ('Trivy', trivy_status),
-            ('Snyk', snyk_status),
-            ('Docker Scout', scout_status),
-            ('Syft', syft_status),
-            ('Grype', grype_status),
-            ('Cosign', cosign_status)
+        "A": [
+            ("Trivy", trivy_status),
+            ("Snyk", snyk_status),
+            ("Docker Scout", scout_status),
+            ("Syft", syft_status),
+            ("Grype", grype_status),
+            ("Cosign", cosign_status),
         ],
-        'B': [
-            ('Reproducibility Gate', reproducibility_status),
-            ('Nextflow Config Validation', nf_config_status),
-            ('nf-core lint', nfcore_status)
+        "B": [
+            ("Reproducibility Gate", reproducibility_status),
+            ("Nextflow Config Validation", nf_config_status),
+            ("nf-core lint", nfcore_status),
         ],
-        'C': [
-            ('Semgrep', semgrep_status),
-            ('Bandit', bandit_status),
-            ('Flake8', flake8_status),
-            ('Black', black_status),
-            ('R lintr', lintr_status),
-            ('R oysteR', oyster_status),
-            ('R riskmetric', riskmetric_status)
+        "C": [
+            ("Semgrep", semgrep_status),
+            ("Bandit", bandit_status),
+            ("Flake8", flake8_status),
+            ("Black", black_status),
+            ("R lintr", lintr_status),
+            ("R oysteR", oyster_status),
+            ("R riskmetric", riskmetric_status),
         ],
-        'D': [
-            ('Gitleaks', gitleaks_status)
-        ]
+        "D": [("Gitleaks", gitleaks_status)],
     }
 
-    failed_per_domain = {dom: [name for name, stat in domain_tools[dom] if stat == 'Failed'] for dom in ['A', 'B', 'C', 'D']}
+    failed_per_domain = {
+        dom: [name for name, stat in domain_tools[dom] if stat == "Failed"]
+        for dom in ["A", "B", "C", "D"]
+    }
     total_failed_tools = sum(len(fails) for fails in failed_per_domain.values())
-    failed_domains_count = sum(1 for fails in failed_per_domain.values() if len(fails) > 0)
-    skipped_tools_list = [name for dom in ['A', 'B', 'C', 'D'] for name, stat in domain_tools[dom] if stat == 'Skipped']
-    warned_tools_list = [name for dom in ['A', 'B', 'C', 'D'] for name, stat in domain_tools[dom] if stat == 'Warning']
+    failed_domains_count = sum(
+        1 for fails in failed_per_domain.values() if len(fails) > 0
+    )
+    skipped_tools_list = [
+        name
+        for dom in ["A", "B", "C", "D"]
+        for name, stat in domain_tools[dom]
+        if stat == "Skipped"
+    ]
+    warned_tools_list = [
+        name
+        for dom in ["A", "B", "C", "D"]
+        for name, stat in domain_tools[dom]
+        if stat == "Warning"
+    ]
 
     # Consensus grading logic
     if total_failed_tools > 2 and failed_domains_count >= 2:
@@ -534,7 +648,9 @@ def generate_dashboard(raw_dir, output_html):
         overall_clinical_class = "bad"
         overall_clinical_badge = "FAILED / BLOCKED"
         overall_clinical_impact = "Immediate Pipeline Suspension. Disallowed for patient diagnostics under CAP/CLIA validation rules."
-    elif (total_failed_tools > 1 and failed_domains_count > 1) or any(len(fails) >= 2 for fails in failed_per_domain.values()):
+    elif (total_failed_tools > 1 and failed_domains_count > 1) or any(
+        len(fails) >= 2 for fails in failed_per_domain.values()
+    ):
         overall_clinical = "WARNING"
         overall_clinical_emoji = "🟠"
         overall_clinical_class = "warn"
@@ -556,12 +672,17 @@ def generate_dashboard(raw_dir, output_html):
     # Check for Domain Incompletion (if all tools in any domain are skipped or not run)
     domain_unverified = False
     for dom, tools in domain_tools.items():
-        active_count = sum(1 for name, stat in tools if stat in ['Passed', 'Failed', 'Warning'])
+        active_count = sum(
+            1 for name, stat in tools if stat in ["Passed", "Failed", "Warning"]
+        )
         if active_count == 0:
             domain_unverified = True
 
     # --- SCIENTIFIC COMPLIANCE BYPASS OVERRIDES ---
-    skipped_per_domain = {dom: sum(1 for name, stat in domain_tools[dom] if stat == 'Skipped') for dom in ['A', 'B', 'C', 'D']}
+    skipped_per_domain = {
+        dom: sum(1 for name, stat in domain_tools[dom] if stat == "Skipped")
+        for dom in ["A", "B", "C", "D"]
+    }
     total_skipped_tools = len(skipped_tools_list)
 
     bypass_override_failed = False
@@ -570,29 +691,39 @@ def generate_dashboard(raw_dir, output_html):
     bypass_override_reasons = []
 
     # 1. Zero-Bypass Pillar: Secrets Auditing (Domain D)
-    if skipped_per_domain['D'] > 0:
+    if skipped_per_domain["D"] > 0:
         bypass_override_failed = True
-        bypass_override_reasons.append("HIPAA compliance breach: Secrets and Credentials scanning (Gitleaks) bypassed.")
+        bypass_override_reasons.append(
+            "HIPAA compliance breach: Secrets and Credentials scanning (Gitleaks) bypassed."
+        )
 
     # 2. Domain B Reproducibility Bypass Limit (Max 1 skip allowed)
-    if skipped_per_domain['B'] > 1:
+    if skipped_per_domain["B"] > 1:
         bypass_override_limitations = True
-        bypass_override_reasons.append(f"Reproducibility validation severely restricted ({skipped_per_domain['B']} skipped in Domain B).")
+        bypass_override_reasons.append(
+            f"Reproducibility validation severely restricted ({skipped_per_domain['B']} skipped in Domain B)."
+        )
 
     # 3. Domain A Supply Chain Bypass Limit (Max 2 skips allowed)
-    if skipped_per_domain['A'] > 2:
+    if skipped_per_domain["A"] > 2:
         bypass_override_limitations = True
-        bypass_override_reasons.append(f"Supply Chain validation severely restricted ({skipped_per_domain['A']} skipped in Domain A).")
+        bypass_override_reasons.append(
+            f"Supply Chain validation severely restricted ({skipped_per_domain['A']} skipped in Domain A)."
+        )
 
     # 4. Domain C Code SAST Bypass Limit (Max 2 skips allowed)
-    if skipped_per_domain['C'] > 2:
+    if skipped_per_domain["C"] > 2:
         bypass_override_limitations = True
-        bypass_override_reasons.append(f"Static code integrity checks severely restricted ({skipped_per_domain['C']} skipped in Domain C).")
+        bypass_override_reasons.append(
+            f"Static code integrity checks severely restricted ({skipped_per_domain['C']} skipped in Domain C)."
+        )
 
     # 5. Entire Domain Unverified (Domain Completeness - 100% skipped in any domain)
     if domain_unverified:
         bypass_override_failed = True
-        bypass_override_reasons.append("Complete verification blank: One or more clinical domains have zero active checkers (100% skipped).")
+        bypass_override_reasons.append(
+            "Complete verification blank: One or more clinical domains have zero active checkers (100% skipped)."
+        )
 
     # Apply Overrides (Capping at lower levels)
     if bypass_override_failed:
@@ -614,16 +745,20 @@ def generate_dashboard(raw_dir, output_html):
         overall_clinical_badge = "APPROVED WITH LIMITATIONS"
         overall_clinical_impact = "Conditional Clinical Use Allowed. Restricting quality gates (e.g. domain bypasses) limits clinical accreditation."
 
-
     # Backwards compatible status variables
     supply_chain = "STRONG" if cosign_status == "Passed" else "PARTIAL"
     secrets_status = "CLEAN" if gitleaks_status == "Passed" else "ACTION REQUIRED"
 
     # Build domain sub-pills for HTML
     domain_pills_html = ""
-    for dom, name in [('A', 'Supply Chain'), ('B', 'Reproducibility'), ('C', 'Code SAST'), ('D', 'Secrets')]:
+    for dom, name in [
+        ("A", "Supply Chain"),
+        ("B", "Reproducibility"),
+        ("C", "Code SAST"),
+        ("D", "Secrets"),
+    ]:
         fails = failed_per_domain[dom]
-        skips = [t for t, s in domain_tools[dom] if s == 'Skipped']
+        skips = [t for t, s in domain_tools[dom] if s == "Skipped"]
         if fails:
             badge_cls = "bg-rose-100 text-rose-800 border-rose-200"
             status_txt = f"{len(fails)} Failed"
@@ -633,7 +768,7 @@ def generate_dashboard(raw_dir, output_html):
         else:
             badge_cls = "bg-emerald-100 text-emerald-800 border-emerald-200"
             status_txt = "Passed"
-        
+
         domain_pills_html += f"""
         <div class="flex items-center justify-between bg-slate-900/35 border border-slate-700/50 p-3 rounded-xl">
             <span class="text-xs font-semibold text-slate-300">{name}</span>
@@ -647,26 +782,40 @@ def generate_dashboard(raw_dir, output_html):
     if overall_clinical == "FAILED":
         for dom, fails in failed_per_domain.items():
             if fails:
-                html_caveat_items.append(f"Domain {dom} critical failure: {', '.join(fails)}")
+                html_caveat_items.append(
+                    f"Domain {dom} critical failure: {', '.join(fails)}"
+                )
     elif overall_clinical == "WARNING":
         for dom, fails in failed_per_domain.items():
             if fails:
-                html_caveat_items.append(f"Systemic failure in Domain {dom}: {', '.join(fails)}")
+                html_caveat_items.append(
+                    f"Systemic failure in Domain {dom}: {', '.join(fails)}"
+                )
     elif overall_clinical == "CONDITIONAL":
         for dom, fails in failed_per_domain.items():
             if fails:
-                html_caveat_items.append(f"Isolated failure in Domain {dom}: {fails[0]} failed. Requires CAPA record.")
+                html_caveat_items.append(
+                    f"Isolated failure in Domain {dom}: {fails[0]} failed. Requires CAPA record."
+                )
 
     # Add specific bypass/override reasons to caveats
     for reason in bypass_override_reasons:
         html_caveat_items.append(f"Verification Constraint: {reason}")
-                
+
     if skipped_tools_list:
-        non_critical_skips = [t for t in skipped_tools_list if not any(t in r for r in bypass_override_reasons)]
+        non_critical_skips = [
+            t
+            for t in skipped_tools_list
+            if not any(t in r for r in bypass_override_reasons)
+        ]
         if non_critical_skips:
-            html_caveat_items.append(f"Other skipped checks: {', '.join(non_critical_skips)}")
+            html_caveat_items.append(
+                f"Other skipped checks: {', '.join(non_critical_skips)}"
+            )
     if warned_tools_list:
-        html_caveat_items.append(f"Linting / Style Quality warnings (Non-critical): {', '.join(warned_tools_list)}")
+        html_caveat_items.append(
+            f"Linting / Style Quality warnings (Non-critical): {', '.join(warned_tools_list)}"
+        )
 
     if html_caveat_items:
         caveats_html = '<div class="text-xs text-slate-300 bg-slate-950/45 p-4 rounded-xl border border-slate-700/40 space-y-1"><div class="font-extrabold text-[10px] text-slate-400 uppercase tracking-widest mb-1.5">Actionable Audit Caveats & Deficiencies:</div>'
@@ -674,18 +823,17 @@ def generate_dashboard(raw_dir, output_html):
             # Escape single quotes safely inside double quoted HTML blocks
             esc_item = item.replace("'", "\\'")
             caveats_html += f'<div class="flex items-start gap-2 text-slate-300 leading-normal"><span class="text-amber-500">•</span> <span>{esc_item}</span></div>'
-        caveats_html += '</div>'
-
+        caveats_html += "</div>"
 
     # ---------------------------------------------------------
     # 2. GENERATE BESPOKE HTML DASHBOARD
     # ---------------------------------------------------------
-    
+
     def status_badge(condition, pass_text, fail_text):
         if condition:
             return f'<span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md text-[10px] font-bold uppercase tracking-wider border border-emerald-200">{pass_text}</span>'
         return f'<span class="px-2 py-0.5 bg-rose-100 text-rose-800 rounded-md text-[10px] font-bold uppercase tracking-wider border border-rose-200">{fail_text}</span>'
-        
+
     def severity_badge(count, sev_type):
         if count == 0:
             return f'<span class="text-slate-400 font-medium">0</span>'
@@ -694,13 +842,15 @@ def generate_dashboard(raw_dir, output_html):
 
     # Build Container Rows
     container_rows = ""
-    for c in data['containers']:
-        cve_list = "<br>".join([f"• {cve}" for cve in c['top_cves']])
-        if not cve_list and c['critical'] == 0 and c['high'] == 0:
+    for c in data["containers"]:
+        cve_list = "<br>".join([f"• {cve}" for cve in c["top_cves"]])
+        if not cve_list and c["critical"] == 0 and c["high"] == 0:
             cve_list = "<span class='text-slate-400 italic'>Clean</span>"
         elif not cve_list:
-            cve_list = "<span class='text-slate-400 italic'>Run local scan for details</span>"
-            
+            cve_list = (
+                "<span class='text-slate-400 italic'>Run local scan for details</span>"
+            )
+
         container_rows += f"""
         <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
             <td class="py-2.5 px-3 font-mono text-[11px] text-slate-800 break-all max-w-[240px]">{c['name']}</td>
@@ -714,8 +864,8 @@ def generate_dashboard(raw_dir, output_html):
 
     # Build Secret Rows
     secret_rows = ""
-    if data['secrets']:
-        for s in data['secrets']:
+    if data["secrets"]:
+        for s in data["secrets"]:
             secret_rows += f"""
             <tr class="border-b border-rose-100 bg-rose-50/20">
                 <td class="py-2.5 px-3 font-mono text-[11px] text-rose-800 break-all max-w-[240px]">{s['file']}</td>
@@ -728,8 +878,8 @@ def generate_dashboard(raw_dir, output_html):
 
     # Build SAST Rows
     sast_rows = ""
-    if data['sast']:
-        for s in data['sast']:
+    if data["sast"]:
+        for s in data["sast"]:
             sast_rows += f"""
             <tr class="border-b border-amber-100 bg-amber-50/20">
                 <td class="py-2.5 px-3 font-bold text-[10px] text-slate-700">{s['tool']}</td>
@@ -1613,12 +1763,15 @@ def generate_dashboard(raw_dir, output_html):
 </body>
 </html>"""
 
-    with open(output_html, 'w') as f:
+    with open(output_html, "w") as f:
         f.write(html)
-        
-    print(f"✅ Transparent Single-Screen Cockpit Dashboard with Raw Explorer written to {output_html}")
 
-if __name__ == '__main__':
+    print(
+        f"✅ Transparent Single-Screen Cockpit Dashboard with Raw Explorer written to {output_html}"
+    )
+
+
+if __name__ == "__main__":
     if len(sys.argv) < 3:
         print("Usage: generate_html_dashboard.py <raw_dir> <output_html>")
         sys.exit(1)

@@ -3,15 +3,18 @@ import os
 import re
 import sys
 
+
 def load_file(path):
     if not os.path.exists(path):
         return None
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, "r", encoding="utf-8") as f:
         return f.read()
 
+
 def save_file(path, content):
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write(content)
+
 
 def main():
     print("🔄 quindecagon Interactive Version Synchronization Utility")
@@ -22,7 +25,9 @@ def main():
     pyproject_path = os.path.join(base_dir, "pyproject.toml")
     init_path = os.path.join(base_dir, "quindecagon", "__init__.py")
     report_path = os.path.join(base_dir, "quindecagon", "report.qmd")
-    dashboard_path = os.path.join(base_dir, "quindecagon", "scripts", "generate_html_dashboard.py")
+    dashboard_path = os.path.join(
+        base_dir, "quindecagon", "scripts", "generate_html_dashboard.py"
+    )
     changelog_path = os.path.join(base_dir, "CHANGELOG.md")
 
     # 2. Read current version from pyproject.toml
@@ -37,7 +42,9 @@ def main():
         sys.exit(1)
 
     current_version = m.group(1)
-    print(f"📦 Current package version (pyproject.toml): \033[1;32m{current_version}\033[0m")
+    print(
+        f"📦 Current package version (pyproject.toml): \033[1;32m{current_version}\033[0m"
+    )
 
     # 3. Parse semver components
     try:
@@ -67,7 +74,7 @@ def main():
         new_version = proposed_major
     elif choice == "4":
         new_version = input("Enter custom version (e.g. 0.3.2): ").strip()
-        if not re.match(r'^\d+\.\d+\.\d+$', new_version):
+        if not re.match(r"^\d+\.\d+\.\d+$", new_version):
             print("❌ Invalid version format. Must be x.y.z")
             sys.exit(1)
     else:
@@ -78,9 +85,7 @@ def main():
 
     # 1. Update pyproject.toml
     new_pyproject = re.sub(
-        r'(version\s*=\s*")([^"]+)(")',
-        rf'\g<1>{new_version}\g<3>',
-        pyproject_content
+        r'(version\s*=\s*")([^"]+)(")', rf"\g<1>{new_version}\g<3>", pyproject_content
     )
     save_file(pyproject_path, new_pyproject)
     print("  ✅ Updated pyproject.toml")
@@ -90,8 +95,8 @@ def main():
     if init_content:
         new_init = re.sub(
             r'(__version__\s*=\s*")([^"]+)(")',
-            rf'\g<1>{new_version}\g<3>',
-            init_content
+            rf"\g<1>{new_version}\g<3>",
+            init_content,
         )
         save_file(init_path, new_init)
         print("  ✅ Updated quindecagon/__init__.py")
@@ -102,31 +107,31 @@ def main():
         # Update subtitle
         new_report = re.sub(
             r'(#subtitle:\s*"Clinical Pipeline Integrity & Security Framework \(v)([^)]+)(\)")',
-            rf'\g<1>{new_version}\g<3>',
-            report_content
+            rf"\g<1>{new_version}\g<3>",
+            report_content,
         )
         # Update header/footers (fancyfoot)
         new_report = re.sub(
-            r'(\\fancyfoot\[L\]\{\\small quindecagon \| v)([^}]+)(\})',
-            rf'\g<1>{new_version}\g<3>',
-            new_report
+            r"(\\fancyfoot\[L\]\{\\small quindecagon \| v)([^}]+)(\})",
+            rf"\g<1>{new_version}\g<3>",
+            new_report,
         )
         # Update text paragraph references
         new_report = re.sub(
-            r'(Clinical Pipeline Integrity & Security Framework \(v)([^)]+)(\))',
-            rf'\g<1>{new_version}\g<3>',
-            new_report
+            r"(Clinical Pipeline Integrity & Security Framework \(v)([^)]+)(\))",
+            rf"\g<1>{new_version}\g<3>",
+            new_report,
         )
         # Update footer copyrights
         new_report = re.sub(
-            r'(Clinical Security Framework v)([^ ]+)( \| Generated)',
-            rf'\g<1>{new_version}\g<3>',
-            new_report
+            r"(Clinical Security Framework v)([^ ]+)( \| Generated)",
+            rf"\g<1>{new_version}\g<3>",
+            new_report,
         )
         new_report = re.sub(
-            r'(Clinical Security Framework v)([^\s]+)( \\textbar)',
-            rf'\g<1>{new_version}\g<3>',
-            new_report
+            r"(Clinical Security Framework v)([^\s]+)( \\textbar)",
+            rf"\g<1>{new_version}\g<3>",
+            new_report,
         )
         save_file(report_path, new_report)
         print("  ✅ Updated quindecagon/report.qmd")
@@ -137,26 +142,26 @@ def main():
         # Update "pipeline_version" key
         new_dash = re.sub(
             r'("pipeline_version":\s*")([^"]+)(")',
-            rf'\g<1>v{new_version}\g<3>',
-            dashboard_content
+            rf"\g<1>v{new_version}\g<3>",
+            dashboard_content,
         )
         # Update blue header description portal subtitle
         new_dash = re.sub(
-            r'(Security Control Portal \| v)([^ ]+)( \| Path)',
-            rf'\g<1>{new_version}\g<3>',
-            new_dash
+            r"(Security Control Portal \| v)([^ ]+)( \| Path)",
+            rf"\g<1>{new_version}\g<3>",
+            new_dash,
         )
         # Update version pill in accreditation card
         new_dash = re.sub(
             r'(tracking-wider bg-slate-800/40 border-slate-700/50 text-slate-300">v)([^<]+)(</span>)',
-            rf'\g<1>{new_version}\g<3>',
-            new_dash
+            rf"\g<1>{new_version}\g<3>",
+            new_dash,
         )
         # Update copyright footer version
         new_dash = re.sub(
-            r'(quindecagon Clinical Security Framework \| v)([^<]+)(</div>)',
-            rf'\g<1>{new_version}\g<3>',
-            new_dash
+            r"(quindecagon Clinical Security Framework \| v)([^<]+)(</div>)",
+            rf"\g<1>{new_version}\g<3>",
+            new_dash,
         )
         save_file(dashboard_path, new_dash)
         print("  ✅ Updated quindecagon/scripts/generate_html_dashboard.py")
@@ -166,16 +171,17 @@ def main():
     if changelog_content:
         # If there's an exact match of the old version in the latest release header (e.g. ## [0.3.1])
         new_changelog = re.sub(
-            rf'(## \[)({re.escape(current_version)})(\])',
-            rf'\g<1>{new_version}\g<3>',
+            rf"(## \[)({re.escape(current_version)})(\])",
+            rf"\g<1>{new_version}\g<3>",
             changelog_content,
-            count=1
+            count=1,
         )
         # Or if the user wants to keep the historical log, they can, but updating the top header makes sure it matches.
         save_file(changelog_path, new_changelog)
         print("  ✅ Updated CHANGELOG.md latest entry header")
 
     print("\n🎉 Version synchronization complete! All components are fully aligned.")
+
 
 if __name__ == "__main__":
     main()
