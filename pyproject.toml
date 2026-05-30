@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quindecagon"
+version = "0.4.0"
+authors = [
+  { name="Jyotirmoy Das" },
+]
+description = "Unified Clinical Security Assurance & Verification Framework for Nextflow Pipelines"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "pandas",
+    "tabulate",
+    "ipython",
+]
+
+[project.scripts]
+quindecagon-audit = "quindecagon.cli:main"
+quindecagon-report = "quindecagon.cli:generate_local"
+
+[tool.setuptools.package-data]
+"quindecagon" = ["scripts/*.sh", "docker/*", "config/*", "report.qmd"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["quindecagon*"]

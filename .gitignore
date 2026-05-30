@@ -1,0 +1,92 @@
+# Secrets and Local Configurations
+.env
+cosign.*
+*.pem
+*.key
+*.pub
+*.pfx
+*.cer
+*.crt
+
+# Reports & Outputs (generated)
+reports/
+
+/.quarto/
+**/*.quarto_ipynb
+handbook/
+
+# Python Runtime & Build Artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+quindecagon.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDEs and Editors
+.vscode/
+.idea/
+.history/
+*.swp
+*.swo
+*~
+
+# Quarto & Jupyter
+/.quarto/
+**/*.quarto_ipynb
+.ipynb_checkpoints/
+
+# R Environment
+.Rhistory
+.Rapp.history
+.RData
+.Ruserdata
+.Rproj.user/
+
+# Nextflow Execution (if run locally)
+.nextflow/
+.nextflow.log*
+work/
+
+# OS-specific Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project-specific / Temporary
+backups/
+docker/
+checklist.md
+Checklist.md
+github_issues.md
+UPDATE.md
+quindecagon.egg-info/
+discussions/
+reports/

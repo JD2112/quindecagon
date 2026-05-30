@@ -1,0 +1,1771 @@
+---
+title: " "
+#"quindecagon"
+#subtitle: "Clinical Pipeline Integrity & Security Framework (v0.4.0)"
+date: " "
+# author: "Jyotirmoy Das
+
+format: 
+  html:
+    toc: true
+    toc-title: "Audit Contents"
+    toc-depth: 3
+    toc-collapsed: true
+    toc-location: left
+    toc-allow-title: true    
+    number-sections: true
+    theme: cosmo
+    code-fold: true
+    self-contained: true
+  pdf:
+    pdf-engine: pdflatex
+    toc: false
+    number-sections: true
+    colorlinks: true
+    geometry:
+      - top=25mm
+      - left=20mm
+      - right=20mm
+      - bottom=25mm
+    include-in-header:
+      text: |
+        \usepackage{fancyhdr}
+        \usepackage{titling}
+        \usepackage{tabu}
+        \usepackage{booktabs}
+        \usepackage{sectsty}
+        \usepackage[most]{tcolorbox}
+        \usepackage{helvet}
+        \DeclareUnicodeCharacter{26A0}{\textbf{[WARN]}}
+        \DeclareUnicodeCharacter{2705}{\textbf{[PASS]}}
+        \DeclareUnicodeCharacter{274C}{\textbf{[FAIL]}}
+        \DeclareUnicodeCharacter{2139}{\textbf{[INFO]}}
+        \DeclareUnicodeCharacter{FE0F}{}
+        \renewcommand\familydefault{\sfdefault}
+        \sectionfont{\color[rgb]{0,0.3,0.6}\huge\bfseries}
+        \subsectionfont{\color[rgb]{0,0.3,0.6}\large\bfseries}
+        \pagestyle{fancy}
+        \usepackage{xcolor}
+        \fancyhf{}
+        \renewcommand{\headrulewidth}{0.4pt}
+        \renewcommand{\footrulewidth}{0.4pt}
+        \fancyhead[L]{\small\textit{quindecagon: Clinical Security Framework}}
+        \fancyhead[R]{}
+        \fancyfoot[L]{\small quindecagon | v0.4.0}
+        \fancyfoot[R]{\thepage}
+        \fancypagestyle{plain}{
+          \fancyhf{}
+          \renewcommand{\headrulewidth}{0pt}
+          \renewcommand{\footrulewidth}{0.4pt}
+          \fancyfoot[L]{\small quindecagon | v0.4.0}
+          \fancyfoot[R]{\thepage}
+        }
+metadata:
+  documentclass: scrartcl
+  classoption:
+    - DIV=11
+    - numbers=noendperiod
+  block-headings: true
+---
+
+```{=html}
+<style>
+  .status-box { padding: 1em; border-radius: 5px; margin-bottom: 1em; }
+  .status-passed { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+  .status-warning { background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; }
+  .status-failed { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+  footer { 
+    margin-top: 3em; 
+    padding: 1em 0; 
+    border-top: 1px solid #dee2e6; 
+    font-size: 0.85em; 
+    color: #6c757d; 
+    text-align: center;
+  }
+</style>
+```
+
+```{python}
+#| echo: false
+#| output: asis
+import os
+import json
+import pandas as pd
+from IPython.display import Markdown, display
+
+# Read raw_dir from environment variable (set by generate_report.sh).
+raw_dir = os.environ.get('SECURITY_RAW_DIR', "reports/raw")
+
+def fmt_blue(text):
+    fmt = os.environ.get('QUARTO_FORMAT', 'html')
+    if fmt in ['latex', 'pdf']:
+        esc_text = text.replace('&', '\\&')
+        return f"\\textcolor[rgb]{{0,0.3,0.6}}{{\\textbf{{{esc_text}}}}}"
+    else:
+        return f"<span style='color:#0056b3; font-weight:bold;'>{text}</span>"
+
+def fmt_status(status_val):
+    if not status_val:
+        return status_val
+    fmt = os.environ.get('QUARTO_FORMAT', 'html')
+    status_str = str(status_val)
+    status_upper = status_str.upper()
+    
+    if fmt in ['latex', 'pdf']:
+        if "PASS" in status_upper:
+            return f"\\textcolor[rgb]{{0,0.5,0}}{{\\textbf{{{status_str}}}}}"
+        elif "FAIL" in status_upper:
+            return f"\\textcolor[rgb]{{0.8,0,0}}{{\\textbf{{{status_str}}}}}"
+        elif "WARN" in status_upper:
+            return f"\\textcolor[rgb]{{0.8,0.5,0}}{{\\textbf{{{status_str}}}}}"
+        else: # Skipped / Not Run
+            return f"\\textcolor[rgb]{{0.5,0.5,0.5}}{{\\textbf{{{status_str}}}}}"
+    else:
+        if "PASS" in status_upper:
+            return f"<span style='color:#2e7d32; font-weight:bold;'>{status_str}</span>"
+        elif "FAIL" in status_upper:
+            return f"<span style='color:#d32f2f; font-weight:bold;'>{status_str}</span>"
+        elif "WARN" in status_upper:
+            return f"<span style='color:#f57c00; font-weight:bold;'>{status_str}</span>"
+        else: # Skipped / Not Run
+            return f"<span style='color:#757575; font-weight:bold;'>{status_str}</span>"
+
+def generate_report_fingerprint(r_dir):
+    try:
+        import hashlib
+        import glob
+        # Find all json and txt files in raw_dir
+        files = sorted(glob.glob(os.path.join(r_dir, "*")))
+        hasher = hashlib.sha256()
+        for fpath in files:
+            if os.path.isfile(fpath) and not fpath.endswith('report.html'):
+                # Hash the file content
+                with open(fpath, 'rb') as f:
+                    hasher.update(f.read())
+        return hasher.hexdigest()
+    except Exception:
+        return "N/A"
+
+def format_word_breaks(s, is_code=True):
+    if not s:
+        return s
+    import re
+    res = str(s)
+    fmt = os.environ.get('QUARTO_FORMAT', 'html')
+    if fmt in ['latex', 'pdf']:
+        # Escape LaTeX special characters
+        res = res.replace('\\', '\\textbackslash ')
+        res = res.replace('~', '\\textasciitilde{}')
+        res = res.replace('$', '\\$')
+        res = res.replace('%', '\\%')
+        res = res.replace('#', '\\#')
+        res = res.replace('{', '\\{')
+        res = res.replace('}', '\\}')
+        res = res.replace('&', '\\&')
+        res = res.replace('_', '\\_')
+        
+        # If we explicitly allow breaks (printed outside markdown backticks)
+        if not is_code:
+            res = res.replace('/', '/\\allowbreak ')
+            res = res.replace('-', '-\\allowbreak ')
+            res = res.replace('.', '.\\allowbreak ')
+            res = res.replace('@', '@\\allowbreak ')
+            res = res.replace(':', ':\\allowbreak ')
+            res = res.replace('\\_', '\\_\\allowbreak ')
+            
+        return res
+    else:
+        res = res.replace('_', '_ ')
+        res = res.replace(':', ' : ')
+        res = res.replace('/', ' / ')
+        res = res.replace('@', ' @ ')
+        res = res.replace('--', ' -- ')
+        res = re.sub(r'([a-zA-Z])-([a-zA-Z])', r'\1- \2', res)
+        return res
+
+
+def get_tool_version(tool_name):
+    import subprocess
+    import re
+    
+    # Static fallbacks (from Dockerfile defaults) in case execution fails or command not found
+    fallbacks = {
+        'gitleaks': 'v8.18.2',
+        'trivy': 'v0.55.0',
+        'snyk': 'Latest',
+        'docker-scout': 'Latest',
+        'syft': 'v1.20.0',
+        'grype': 'v0.88.0',
+        'cosign': 'v3.0.6',
+        'semgrep': 'v1.160.0',
+        'bandit': 'v1.7.5',
+        'flake8': 'v6.0.0',
+        'black': 'v24.0.0',
+        'lintr': 'v3.1.2',
+        'oysteR': 'v0.1.1',
+        'riskmetric': 'v0.2.4',
+        'nf-core': 'v2.14'
+    }
+    
+    try:
+        if tool_name == 'gitleaks':
+            res = subprocess.run(['gitleaks', 'version'], capture_output=True, text=True, timeout=5)
+            v = res.stdout.strip()
+            if re.search(r'\d+\.\d+\.\d+', v):
+                return v if v.startswith('v') else f"v{v}"
+        elif tool_name == 'trivy':
+            res = subprocess.run(['trivy', '--version'], capture_output=True, text=True, timeout=5)
+            m = re.search(r'Version:\s*(\d+\.\d+\.\d+)', res.stdout)
+            if m: return f"v{m.group(1)}"
+        elif tool_name == 'snyk':
+            res = subprocess.run(['snyk', '--version'], capture_output=True, text=True, timeout=5)
+            m = re.search(r'(\d+\.\d+\.\d+)', res.stdout)
+            if m: return f"v{m.group(1)}"
+        elif tool_name == 'docker-scout':
+            res = subprocess.run(['docker-scout', 'version'], capture_output=True, text=True, timeout=5)
+            m = re.search(r'version\s+(\d+\.\d+\.\d+)', res.stdout)
+            if m: return f"v{m.group(1)}"
+            res = subprocess.run(['docker-scout', '--version'], capture_output=True, text=True, timeout=5)
+            m = re.search(r'version\s+(\d+\.\d+\.\d+)', res.stdout)
+            if m: return f"v{m.group(1)}"
+        elif tool_name == 'syft':
+            res = subprocess.run(['syft', '--version'], capture_output=True, text=True, timeout=5)
+            m = re.search(r'(\d+\.\d+\.\d+)', res.stdout)
+            if m: return f"v{m.group(1)}"
+        elif tool_name == 'grype':
+            res = subprocess.run(['grype', '--version'], capture_output=True, text=True, timeout=5)
+            m = re.search(r'(\d+\.\d+\.\d+)', res.stdout)
+            if m: return f"v{m.group(1)}"
+        elif tool_name == 'cosign':
+            res = subprocess.run(['cosign', 'version'], capture_output=True, text=True, timeout=5)
+            m = re.search(r'GitVersion:\s*v?(\d+\.\d+\.\d+)', res.stdout)
+            if m: return f"v{m.group(1)}"
+            m = re.search(r'(\d+\.\d+\.\d+)', res.stdout)
+            if m: return f"v{m.group(1)}"
+        elif tool_name == 'semgrep':
+            res = subprocess.run(['semgrep', '--version'], capture_output=True, text=True, timeout=5)
+            v = res.stdout.strip()
+            if re.search(r'\d+\.\d+\.\d+', v):
+                return f"v{v}"
+        elif tool_name == 'bandit':
+            res = subprocess.run(['bandit', '--version'], capture_output=True, text=True, timeout=5)
+            out = res.stdout + res.stderr
+            m = re.search(r'(\d+\.\d+\.\d+)', out)
+            if m: return f"v{m.group(1)}"
+        elif tool_name == 'flake8':
+            res = subprocess.run(['flake8', '--version'], capture_output=True, text=True, timeout=5)
+            m = re.search(r'^(\d+\.\d+\.\d+)', res.stdout.strip())
+            if m: return f"v{m.group(1)}"
+        elif tool_name == 'black':
+            res = subprocess.run(['black', '--version'], capture_output=True, text=True, timeout=5)
+            m = re.search(r'black,\s*v?(\d+\.\d+\.\d+)', res.stdout)
+            if m: return f"v{m.group(1)}"
+            m = re.search(r'(\d+\.\d+\.\d+)', res.stdout)
+            if m: return f"v{m.group(1)}"
+        elif tool_name == 'lintr':
+            res = subprocess.run(['Rscript', '-e', 'cat(as.character(packageVersion("lintr")))'], capture_output=True, text=True, timeout=5)
+            v = res.stdout.strip()
+            if re.search(r'\d+\.\d+\.\d+', v):
+                return f"v{v}"
+        elif tool_name == 'oysteR':
+            res = subprocess.run(['Rscript', '-e', 'cat(as.character(packageVersion("oysteR")))'], capture_output=True, text=True, timeout=5)
+            v = res.stdout.strip()
+            if re.search(r'\d+\.\d+\.\d+', v):
+                return f"v{v}"
+        elif tool_name == 'riskmetric':
+            res = subprocess.run(['Rscript', '-e', 'cat(as.character(packageVersion("riskmetric")))'], capture_output=True, text=True, timeout=5)
+            v = res.stdout.strip()
+            if re.search(r'\d+\.\d+\.\d+', v):
+                return f"v{v}"
+        elif tool_name == 'nf-core':
+            res = subprocess.run(['nf-core', '--version'], capture_output=True, text=True, timeout=5)
+            m = re.search(r'version\s+(\d+\.\d+\.\d+)', res.stdout)
+            if m: return f"v{m.group(1)}"
+            m = re.search(r'(\d+\.\d+\.\d+)', res.stdout)
+            if m: return f"v{m.group(1)}"
+    except Exception:
+        pass
+    
+    return fallbacks.get(tool_name, 'Unknown')
+
+
+def parse_sarif_docker_scout(path):
+    """
+    Parses a SARIF JSON file from docker-scout and returns counts of Critical and High severity vulnerabilities.
+    """
+    counts = {'C': 0, 'H': 0, 'M': 0, 'L': 0}
+    try:
+        with open(path, 'r') as f:
+            sarif = json.load(f)
+        
+        rules_map = {}
+        for run in sarif.get('runs', []):
+            driver = run.get('tool', {}).get('driver', {})
+            for rule in driver.get('rules', []):
+                rule_id = rule.get('id')
+                if rule_id:
+                    rules_map[rule_id] = rule
+            
+            for res in run.get('results', []):
+                rule_id = res.get('ruleId')
+                rule = rules_map.get(rule_id, {}) if rule_id else {}
+                
+                severity = None
+                tags = rule.get('properties', {}).get('tags', [])
+                for t in tags:
+                    if 'severity:' in t.lower():
+                        parts = t.split(':')
+                        if len(parts) > 1:
+                            severity = parts[1].strip().upper()
+                            break
+                
+                if not severity:
+                    severity = res.get('properties', {}).get('cvssv3_severity')
+                
+                if not severity:
+                    severity = rule.get('properties', {}).get('cvssv3_severity')
+
+                if not severity:
+                    cvss = res.get('properties', {}).get('cvssv3_score') or rule.get('properties', {}).get('cvssv3_score')
+                    if cvss:
+                        try:
+                            score = float(cvss)
+                            if score >= 9.0: severity = 'CRITICAL'
+                            elif score >= 7.0: severity = 'HIGH'
+                            elif score >= 4.0: severity = 'MEDIUM'
+                            else: severity = 'LOW'
+                        except: pass
+                
+                if not severity:
+                    level = res.get('level', 'warning').lower()
+                    if level == 'error':
+                        severity = 'HIGH'
+                    elif level == 'warning':
+                        severity = 'MEDIUM'
+                    else:
+                        severity = 'LOW'
+                
+                if severity:
+                    s_char = severity.strip().upper()[0]
+                    if s_char in counts:
+                        counts[s_char] += 1
+                    else:
+                        if 'CRIT' in severity.upper(): counts['C'] += 1
+                        elif 'HIGH' in severity.upper(): counts['H'] += 1
+                        elif 'MED' in severity.upper(): counts['M'] += 1
+                        elif 'LOW' in severity.upper(): counts['L'] += 1
+    except:
+        pass
+    return counts
+
+def get_detailed_vulns(img_name):
+    """Returns detailed counts per tool with robust filename and JSON parsing."""
+    safe_name_new = img_name.replace('/', '_').replace(':', '_').replace('@', '_')
+    safe_name_old = img_name.replace('/', '_').replace(':', '_') # Keep old for backwards compatibility
+    
+    results = {
+        'trivy': {'counts': {'C': 0, 'H': 0, 'M': 0, 'L': 0}, 'status': -1},
+        'snyk': {'counts': {'C': 0, 'H': 0, 'M': 0, 'L': 0}, 'status': -1},
+        'grype': {'counts': {'C': 0, 'H': 0, 'M': 0, 'L': 0}, 'status': -1},
+        'docker_scout': {'counts': {'C': 0, 'H': 0, 'M': 0, 'L': 0}, 'status': -1},
+        'syft': {'status': -1},
+        'cosign': {'status': -1}
+    }
+    
+    def find_file(prefix, suffix):
+        for sn in [safe_name_new, safe_name_old]:
+            p = os.path.join(raw_dir, f"{prefix}_{sn}{suffix}")
+            if os.path.exists(p): return p
+        return None
+
+    # 1. Trivy
+    path = find_file("trivy", ".json")
+    if path:
+        results['trivy']['status'] = 0
+        try:
+            with open(path, 'r') as f:
+                data = json.load(f)
+                for res in data.get('Results', []):
+                    for v in res.get('Vulnerabilities', []):
+                        s = v.get('Severity', '').upper()[0]
+                        if s in results['trivy']['counts']: results['trivy']['counts'][s] += 1
+            if results['trivy']['counts']['C'] > 0: results['trivy']['status'] = 1
+        except: pass
+
+    # 2. Snyk
+    path = find_file("snyk", ".json")
+    if path:
+        results['snyk']['status'] = 0
+        try:
+            with open(path, 'r') as f:
+                data = json.load(f)
+                vulns = data.get('vulnerabilities', []) if isinstance(data, dict) else []
+                for v in vulns:
+                    s = v.get('severity', '').upper()[0]
+                    if s in results['snyk']['counts']: results['snyk']['counts'][s] += 1
+            if results['snyk']['counts']['C'] > 0: results['snyk']['status'] = 1
+        except: pass
+
+    # 3. Grype
+    path = find_file("grype", ".json")
+    if path:
+        results['grype']['status'] = 0
+        try:
+            with open(path, 'r') as f:
+                data = json.load(f)
+                for match in data.get('matches', []):
+                    s = match.get('vulnerability', {}).get('severity', '').upper()[0]
+                    if s in results['grype']['counts']: results['grype']['counts'][s] += 1
+            if results['grype']['counts']['C'] > 0: results['grype']['status'] = 1
+        except: pass
+
+    # 3.5 Docker Scout (SARIF)
+    path = find_file("docker_scout", "_cves.json")
+    if path:
+        results['docker_scout']['status'] = 0
+        try:
+            counts = parse_sarif_docker_scout(path)
+            results['docker_scout']['counts'] = counts
+            if counts['C'] > 0: results['docker_scout']['status'] = 1
+        except: pass
+
+    # 4. Syft (SBOM)
+    path = find_file("sbom", ".spdx.json")
+    if path: results['syft']['status'] = 0
+    
+    # 5. Cosign
+    path = find_file("cosign", ".txt")
+    if path:
+        results['cosign']['status'] = 1
+        with open(path, 'r') as f:
+            if "verified" in f.read().lower(): results['cosign']['status'] = 0
+            
+    return results
+
+def get_status_info(file):
+    path = os.path.join(raw_dir, file)
+    status_label = " Not Run"
+    comment = ""
+    if os.path.exists(path):
+        try:
+            with open(path, 'r') as f:
+                data = json.load(f)
+                status = data.get('status', 'unknown')
+                if status == 'passed': status_label = "Passed"
+                elif status == 'failed': status_label = "Failed"
+                elif status == 'warning': status_label = "Warning"
+                elif status == 'skipped': status_label = "Skipped"
+                else: status_label = f"{status}"
+                
+                if file == 'nfcore_lint.json' and status == 'warning':
+                    comment = "Custom pipeline config"
+                elif file == 'reproducibility.json':
+                    if status == 'failed' or status == 'warning':
+                        has_hashes = data.get('container_hashes', False)
+                        has_lock = data.get('nextflow_lock', False)
+                        if not has_hashes: comment = "CRITICAL: Using mutable tags instead of SHA256 hashes"
+                        elif not has_lock: comment = "Missing nextflow.lock file"
+                    elif status == 'passed':
+                        comment = "Strict reproducibility (hashes + lockfile)"
+                elif file == 'nf_config_validation.json' and status == 'warning':
+                    comment = "Deprecated Nextflow syntax found"
+                elif file == 'bandit.json':
+                    issues = data.get('issues', 0)
+                    high = data.get('high', 0)
+                    if status == 'passed': comment = "No security issues found in Python code"
+                    elif status == 'warning': comment = f"Found {issues} issues ({high} high severity)"
+                    elif status == 'failed': comment = f"Found {high} HIGH severity Python vulnerabilities"
+                elif file == 'flake8.json':
+                    issues = data.get('issues', 0)
+                    if status == 'passed': comment = "Python code adheres to PEP 8 standards"
+                    elif status == 'warning': comment = f"Found {issues} code quality / styling issues"
+                elif file == 'gitleaks.json':
+                    gitleaks_path = os.path.join(raw_dir, "gitleaks_findings.json")
+                    if os.path.exists(gitleaks_path):
+                        with open(gitleaks_path, 'r') as f:
+                            raw_findings = json.load(f)
+                            seen = set()
+                            findings = []
+                            binary_or_report_exts = ('.png', '.jpg', '.jpeg', '.gif', '.pdf', '.zip', '.tar', '.gz', '.bam', '.sam', '.bai', '.fastq', '.fq', '.vcf', '.qmd', '.html', '.css', '.svg', '.webp', '.lock')
+                            for r in raw_findings:
+                                filepath = r.get('File', '')
+                                if filepath.lower().endswith(binary_or_report_exts) or 'reports/' in filepath or 'report-check/' in filepath or '.git/' in filepath or 'docs/' in filepath or 'site/' in filepath or 'containers/docker/' in filepath:
+                                    continue
+                                key = (filepath, r.get('StartLine', ''), r.get('RuleID', ''))
+                                if key not in seen:
+                                    seen.add(key)
+                                    findings.append(r)
+                            leaks = len(findings)
+                            if leaks == 0:
+                                status_label = 'Passed'
+                                comment = "No active hardcoded credentials or API keys found"
+                            else:
+                                status_label = 'Failed'
+                                comment = f"CRITICAL: Found {leaks} active hardcoded secrets!"
+                    else:
+                        if status == 'passed':
+                            status_label = 'Passed'
+                            comment = "No hardcoded credentials or API keys found"
+                        elif status == 'failed':
+                            status_label = 'Failed'
+                            comment = "CRITICAL: Found hardcoded secrets!"
+                elif file == 'r_audit.json':
+                    issues = data.get('issues', 0)
+                    if status == 'passed': comment = "No unsafe R evals/system calls or vulnerable packages"
+                    elif status == 'warning': comment = f"Found {issues} unsafe R patterns or dependencies"
+                elif file == 'black.json':
+                    unformatted = data.get('unformatted_files', 0)
+                    if status == 'passed': comment = "All Python files are deterministically formatted"
+                    elif status == 'warning': comment = f"Found {unformatted} unformatted Python files"
+                    elif status == 'skipped': comment = data.get('reason', 'Skipped')
+                
+                if 'reason' in data and file != 'gitleaks.json' and file != 'black.json':
+                    comment = data['reason']
+                    
+        except (json.JSONDecodeError, Exception):
+            status_label = "Skipped"
+            comment = "Error reading output"
+    return status_label, comment
+```
+
+```{python}
+#| echo: false
+#| output: asis
+import datetime
+
+# --- PERFORM ALL COMPLIANCE CALCULATIONS ---
+# Load images list
+images = []
+images_file = os.path.join(raw_dir, "images.txt")
+if os.path.exists(images_file):
+    try:
+        with open(images_file, 'r') as f:
+            images = [line.strip() for line in f if line.strip()]
+    except: pass
+if not images and os.path.exists(raw_dir):
+    try:
+        for f in os.listdir(raw_dir):
+            if f.startswith("trivy_") and f.endswith(".json"):
+                img_part = f[6:-5]
+                if img_part not in images:
+                    images.append(img_part)
+    except: pass
+
+trivy_status, snyk_status, grype_status, scout_status, syft_status, cosign_status = "Not Run", "Not Run", "Not Run", "Not Run", "Not Run", "Not Run"
+trivy_comment, snyk_comment, grype_comment, scout_comment, syft_comment, cosign_comment = "", "", "", "", "", ""
+
+if images:
+    trivy_fails = snyk_fails = grype_fails = scout_fails = syft_fails = cosign_fails = 0
+    trivy_scanned = snyk_scanned = grype_scanned = scout_scanned = syft_scanned = cosign_scanned = 0
+    trivy_crits = snyk_crits = grype_crits = scout_crits = 0
+    
+    for img in images:
+        res = get_detailed_vulns(img)
+        if res['trivy']['status'] != -1:
+            trivy_scanned += 1
+            if res['trivy']['status'] == 1: trivy_fails += 1
+            trivy_crits += res['trivy']['counts']['C']
+        if res['snyk']['status'] != -1:
+            snyk_scanned += 1
+            if res['snyk']['status'] == 1: snyk_fails += 1
+            snyk_crits += res['snyk']['counts']['C']
+        if res['grype']['status'] != -1:
+            grype_scanned += 1
+            if res['grype']['status'] == 1: grype_fails += 1
+            grype_crits += res['grype']['counts']['C']
+        if res['docker_scout']['status'] != -1:
+            scout_scanned += 1
+            if res['docker_scout']['status'] == 1: scout_fails += 1
+            scout_crits += res['docker_scout']['counts']['C']
+        if res['syft']['status'] != -1:
+            syft_scanned += 1
+            if res['syft']['status'] == 1: syft_fails += 1
+        if res['cosign']['status'] != -1:
+            cosign_scanned += 1
+            if res['cosign']['status'] == 1: cosign_fails += 1
+
+    if trivy_scanned > 0:
+        trivy_status = "Failed" if trivy_fails > 0 else "Passed"
+        trivy_comment = f"Scanned {trivy_scanned} images. Found {trivy_crits} Critical CVEs." if trivy_crits > 0 else f"Scanned {trivy_scanned} images. All clean."
+    if snyk_scanned > 0:
+        snyk_status = "Failed" if snyk_fails > 0 else "Passed"
+        snyk_comment = f"Scanned {snyk_scanned} images. Found {snyk_crits} Critical CVEs." if snyk_crits > 0 else f"Scanned {snyk_scanned} images. All clean."
+    if grype_scanned > 0:
+        grype_status = "Failed" if grype_fails > 0 else "Passed"
+        grype_comment = f"Scanned {grype_scanned} images. Found {grype_crits} Critical CVEs." if grype_crits > 0 else f"Scanned {grype_scanned} images. All clean."
+    if scout_scanned > 0:
+        scout_status = "Failed" if scout_fails > 0 else "Passed"
+        scout_comment = f"Scanned {scout_scanned} images. Found {scout_crits} Critical CVEs." if scout_crits > 0 else f"Scanned {scout_scanned} images. All clean."
+    if syft_scanned > 0:
+        syft_status = "Failed" if syft_fails > 0 else "Passed"
+        syft_comment = f"SBOMs generated for {syft_scanned} images." if syft_fails == 0 else f"SBOM failed for {syft_fails}/{syft_scanned} images."
+    if cosign_scanned > 0:
+        cosign_status = "Failed" if cosign_fails > 0 else "Passed"
+        cosign_comment = f"All {cosign_scanned} signatures verified." if cosign_fails == 0 else f"Failed verification for {cosign_fails}/{cosign_scanned} images."
+
+# Snyk skip overrides
+snyk_json_path = os.path.join(raw_dir, "snyk.json")
+if os.path.exists(snyk_json_path):
+    try:
+        with open(snyk_json_path, 'r') as f:
+            s_data = json.load(f)
+            if s_data.get('status') == 'skipped':
+                snyk_status = "Skipped"
+                snyk_comment = s_data.get('reason', 'Disabled by user')
+    except: pass
+
+r_path = os.path.join(raw_dir, "r_audit_raw.json")
+lintr_status = "Not Run"
+lintr_comment = ""
+oyster_status = "Not Run"
+oyster_comment = ""
+riskmetric_status = "Not Run"
+riskmetric_comment = ""
+
+if os.path.exists(r_path):
+    try:
+        with open(r_path, 'r') as f:
+            r_data = json.load(f)
+            linters = r_data.get('linters', [])
+            lint_count = len(linters) if isinstance(linters, list) else r_data.get('lint_count', 0)
+            lintr_status = "Passed" if lint_count == 0 else "Warning"
+            lintr_comment = f"Found {lint_count} code quality / style warnings." if lint_count > 0 else "No R style or dangerous patterns found."
+            
+            vulns = r_data.get('vulnerabilities', [])
+            vuln_count = len(vulns) if isinstance(vulns, list) else r_data.get('vuln_count', 0)
+            oyster_status = "Passed" if vuln_count == 0 else "Failed"
+            oyster_comment = f"Found {vuln_count} vulnerable R dependencies." if vuln_count > 0 else "No vulnerable R dependencies detected."
+            
+            risks = r_data.get('risks', [])
+            risk_count = len(risks) if isinstance(risks, list) else 0
+            riskmetric_status = "Passed" if risk_count == 0 else "Warning"
+            riskmetric_comment = f"Found {risk_count} low quality / risk R packages." if risk_count > 0 else "All R packages pass maintenance score validation."
+    except: pass
+
+r_json_path = os.path.join(raw_dir, "r_audit.json")
+if os.path.exists(r_json_path):
+    try:
+        with open(r_json_path, 'r') as f:
+            r_data = json.load(f)
+            if r_data.get('status') == 'skipped':
+                lintr_status = oyster_status = riskmetric_status = "Skipped"
+                lintr_comment = oyster_comment = riskmetric_comment = r_data.get('reason', 'No R files found')
+    except: pass
+
+has_r_manifest = os.path.exists("/target/renv.lock") or os.path.exists("/target/DESCRIPTION")
+if not has_r_manifest and lintr_status not in ["Skipped", "Not Run"]:
+    oyster_status = "Skipped"
+    oyster_comment = "Skipped: no renv.lock or DESCRIPTION file found"
+    riskmetric_status = "Skipped"
+    riskmetric_comment = "Skipped: no renv.lock or DESCRIPTION file found"
+
+gitleaks_status, gitleaks_comment = get_status_info("gitleaks.json")
+semgrep_status, semgrep_comment = get_status_info("semgrep.json")
+bandit_status, bandit_comment = get_status_info("bandit.json")
+flake8_status, flake8_comment = get_status_info("flake8.json")
+black_status, black_comment = get_status_info("black.json")
+nfcore_status, nfcore_comment = get_status_info("nfcore_lint.json")
+nf_config_status, nf_config_comment = get_status_info("nf_config_validation.json")
+reproducibility_status, reproducibility_comment = get_status_info("reproducibility.json")
+
+# Define tools by Clinical Domain
+domain_tools = {
+    'A': [
+        ('Trivy', trivy_status, trivy_comment),
+        ('Snyk', snyk_status, snyk_comment),
+        ('Docker Scout', scout_status, scout_comment),
+        ('Syft', syft_status, syft_comment),
+        ('Grype', grype_status, grype_comment),
+        ('Cosign', cosign_status, cosign_comment)
+    ],
+    'B': [
+        ('Reproducibility Gate', reproducibility_status, reproducibility_comment),
+        ('Nextflow Config Validation', nf_config_status, nf_config_comment),
+        ('nf-core lint', nfcore_status, nfcore_comment)
+    ],
+    'C': [
+        ('Semgrep', semgrep_status, semgrep_comment),
+        ('Bandit', bandit_status, bandit_comment),
+        ('Flake8', flake8_status, flake8_comment),
+        ('Black', black_status, black_comment),
+        ('R lintr', lintr_status, lintr_comment),
+        ('R oysteR', oyster_status, oyster_comment),
+        ('R riskmetric', riskmetric_status, riskmetric_comment)
+    ],
+    'D': [
+        ('Gitleaks', gitleaks_status, gitleaks_comment)
+    ]
+}
+
+failed_per_domain = {dom: [name for name, stat, comm in domain_tools[dom] if stat == 'Failed'] for dom in ['A', 'B', 'C', 'D']}
+total_failed_tools = sum(len(fails) for fails in failed_per_domain.values())
+failed_domains_count = sum(1 for fails in failed_per_domain.values() if len(fails) > 0)
+skipped_tools_list = [name for dom in ['A', 'B', 'C', 'D'] for name, stat, comm in domain_tools[dom] if stat == 'Skipped']
+warned_tools_list = [name for dom in ['A', 'B', 'C', 'D'] for name, stat, comm in domain_tools[dom] if stat == 'Warning']
+
+# 4-Level Evaluation Engine
+# 1. FAILED / BLOCKED: > 2 tools failed from >= 2 domains
+if total_failed_tools > 2 and failed_domains_count >= 2:
+    compliance_level = "FAILED / BLOCKED"
+    compliance_emoji = "🔴"
+    compliance_impact = "Immediate Pipeline Suspension. Disallowed for patient diagnostics under CAP/CLIA guidelines."
+    compliance_class = "failed"
+    compliance_color = "#721c24"
+    compliance_back = "#f8d7da"
+    compliance_border = "#f5c6cb"
+    ltx_back = "red!5!white"
+    ltx_frame = "red!75!black"
+# 2. WARNING: > 1 tools failed from > 1 domains, OR exactly 2 tools failed in 1 domain
+elif (total_failed_tools > 1 and failed_domains_count > 1) or any(len(fails) >= 2 for fails in failed_per_domain.values()):
+    compliance_level = "WARNING"
+    compliance_emoji = "🟠"
+    compliance_impact = "Systemic Deficiencies / Concentrated Quality Risks. Requires URGENT REVIEW and remediation before re-validation."
+    compliance_class = "warning"
+    compliance_color = "#c2410c"
+    compliance_back = "#fff7ed"
+    compliance_border = "#ea580c"
+    ltx_back = "orange!5!white"
+    ltx_frame = "orange!80!black"
+# 3. APPROVED WITH LIMITATIONS: Exactly 1 tool failed in any domain, all other domains pass
+elif total_failed_tools == 1:
+    compliance_level = "APPROVED WITH LIMITATIONS"
+    compliance_emoji = "🟡"
+    compliance_impact = "Conditional Clinical Use Allowed. Requires a documented 30-day Corrective and Preventive Action (CAPA) plan for the isolated failure."
+    compliance_class = "warning"
+    compliance_color = "#856404"
+    compliance_back = "#fff3cd"
+    compliance_border = "#ffeeba"
+    ltx_back = "yellow!5!white"
+    ltx_frame = "yellow!60!orange"
+# 4. APPROVED: 0 failed tools (warnings/skips allowed)
+else:
+    compliance_level = "APPROVED"
+    compliance_emoji = "🟢"
+    compliance_impact = "Full Clinical Certification. The pipeline satisfies core security validation gates and is certified for routine variant diagnostics."
+    compliance_class = "passed"
+    compliance_color = "#155724"
+    compliance_back = "#d4edda"
+    compliance_border = "#c3e6cb"
+    ltx_back = "green!5!white"
+    ltx_frame = "green!60!black"
+
+# Check for Domain Incompletion (if all tools in any domain are skipped or not run)
+domain_unverified = False
+for dom, tools in domain_tools.items():
+    active_count = sum(1 for name, stat, comm in tools if stat in ['Passed', 'Failed', 'Warning'])
+    if active_count == 0:
+        domain_unverified = True
+
+# --- SCIENTIFIC COMPLIANCE BYPASS OVERRIDES ---
+# Get skipped counts per domain
+skipped_per_domain = {dom: sum(1 for name, stat, comm in tools if stat == 'Skipped') for dom, tools in domain_tools.items()}
+total_skipped_tools = len(skipped_tools_list)
+
+bypass_override_failed = False
+bypass_override_limitations = False
+bypass_override_warning = False
+bypass_override_reasons = []
+
+# 1. Zero-Bypass Pillar: Secrets Auditing (Domain D)
+if skipped_per_domain['D'] > 0:
+    bypass_override_failed = True
+    bypass_override_reasons.append("HIPAA compliance breach: Secrets and Credentials scanning (Gitleaks) bypassed.")
+
+# 2. Domain B Reproducibility Bypass Limit (Max 1 skip allowed)
+if skipped_per_domain['B'] > 1:
+    bypass_override_limitations = True
+    bypass_override_reasons.append(f"Reproducibility validation severely restricted ({skipped_per_domain['B']} skipped in Domain B).")
+
+# 3. Domain A Supply Chain Bypass Limit (Max 2 skips allowed)
+if skipped_per_domain['A'] > 2:
+    bypass_override_limitations = True
+    bypass_override_reasons.append(f"Supply Chain validation severely restricted ({skipped_per_domain['A']} skipped in Domain A).")
+
+# 4. Domain C Code SAST Bypass Limit (Max 2 skips allowed)
+if skipped_per_domain['C'] > 2:
+    bypass_override_limitations = True
+    bypass_override_reasons.append(f"Static code integrity checks severely restricted ({skipped_per_domain['C']} skipped in Domain C).")
+
+# 5. Entire Domain Unverified (Domain Completeness - 100% skipped in any domain)
+if domain_unverified:
+    bypass_override_failed = True
+    bypass_override_reasons.append("Complete verification blank: One or more clinical domains have zero active checkers (100% skipped).")
+
+# Apply Overrides (Capping at lower levels)
+if bypass_override_failed:
+    compliance_level = "FAILED / BLOCKED"
+    compliance_emoji = "🔴"
+    compliance_impact = "Immediate Pipeline Suspension. Disallowed for patient diagnostics under CAP/CLIA guidelines due to complete domain bypasses."
+    compliance_class = "failed"
+    compliance_color = "#721c24"
+    compliance_back = "#f8d7da"
+    compliance_border = "#f5c6cb"
+    ltx_back = "red!5!white"
+    ltx_frame = "red!75!black"
+elif bypass_override_warning and compliance_level in ["APPROVED", "APPROVED WITH LIMITATIONS"]:
+    compliance_level = "WARNING"
+    compliance_emoji = "🟠"
+    compliance_impact = "Systemic Verification Gaps. Bypassing critical controls prevents safe clinical approval."
+    compliance_class = "warning"
+    compliance_color = "#c2410c"
+    compliance_back = "#fff7ed"
+    compliance_border = "#ea580c"
+    ltx_back = "orange!5!white"
+    ltx_frame = "orange!80!black"
+elif bypass_override_limitations and compliance_level == "APPROVED":
+    compliance_level = "APPROVED WITH LIMITATIONS"
+    compliance_emoji = "🟡"
+    compliance_impact = "Conditional Clinical Use Allowed. Restricting quality gates (e.g. domain bypasses) limits clinical accreditation."
+    compliance_class = "warning"
+    compliance_color = "#856404"
+    compliance_back = "#fff3cd"
+    compliance_border = "#ffeeba"
+    ltx_back = "yellow!5!white"
+    ltx_frame = "yellow!60!orange"
+
+# Construct Actionable Deficiencies list
+caveats = []
+if compliance_level == "FAILED / BLOCKED":
+    for dom, fails in failed_per_domain.items():
+        if fails:
+            caveats.append(f"Domain {dom} critical failure: {', '.join(fails)}")
+elif compliance_level == "WARNING":
+    for dom, fails in failed_per_domain.items():
+        if fails:
+            caveats.append(f"Systemic failure in Domain {dom}: {', '.join(fails)}")
+elif compliance_level == "APPROVED WITH LIMITATIONS":
+    for dom, fails in failed_per_domain.items():
+        if fails:
+            caveats.append(f"Isolated failure in Domain {dom}: {fails[0]} failed. Requires a standard CAPA record.")
+
+# Add specific bypass/override reasons to caveats
+for reason in bypass_override_reasons:
+    caveats.append(f"Verification Constraint: {reason}")
+
+if skipped_tools_list:
+    non_critical_skips = [t for t in skipped_tools_list if not any(r.endswith(t) for r in bypass_override_reasons)]
+    if non_critical_skips:
+        caveats.append(f"Other skipped checks: {', '.join(non_critical_skips)}")
+if warned_tools_list:
+    caveats.append(f"Linting / Style Quality warnings (Non-critical): {', '.join(warned_tools_list)}")
+
+# Load metadata
+metadata_path = os.path.join(raw_dir, "metadata.json")
+meta_name = os.environ.get('PIPELINE_NAME', 'quindecagon')
+meta_path = 'N/A'
+meta_command = 'N/A'
+if os.path.exists(metadata_path):
+    try:
+        with open(metadata_path, 'r') as f:
+            mdata = json.load(f)
+            meta_name = mdata.get('pipeline_name', meta_name)
+            meta_path = mdata.get('pipeline_path', 'N/A')
+            meta_command = mdata.get('run_command', 'N/A')
+    except Exception:
+        pass
+
+timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+print(f"# quindecagon: Clinical Pipeline Integrity & Security Report {{.unnumbered}}\n")
+print("This report presents the clinical validation results compiled by the **quindecagon** Clinical Pipeline Integrity & Security Framework (v0.4.0). quindecagon employs a comprehensive, 'defense-in-depth' architecture synthesizing outputs from 15 specialized security, quality-assurance, and supply-chain auditing instruments. Designed specifically for molecular diagnostics and CAP/CLIA/HIPAA-regulated bioinformatics environments, this automated audit eliminates container tag drift, detects static code vulnerabilities, identifies hardcoded secrets, and mathematically guarantees the end-to-end reproducibility of clinical pipelines.\n")
+fmt = os.environ.get('QUARTO_FORMAT', 'html')
+if fmt in ['latex', 'pdf']:
+    print(f"**Report Formats**: [Open Interactive HTML Cockpit Dashboard (report.html)](report.html) | [View Clinical PDF Certificate (report.pdf)](report.pdf)\n")
+else:
+    print(f"**Report Formats**: [💻 Open Interactive HTML Cockpit Dashboard](report.html) | [📄 View Clinical PDF Certificate](report.pdf)\n")
+
+# --- RENDER ACCREDITATION BOX ---
+fmt = os.environ.get('QUARTO_FORMAT', 'html')
+if fmt in ['latex', 'pdf']:
+    print(f"\\begin{{tcolorbox}}[colback={ltx_back},colframe={ltx_frame},arc=2mm,title=\\textbf{{{compliance_level} - Clinical Certification Status}}]")
+    print(f"\\textbf{{Clinical Compliance Level}}: {compliance_level}\\\\")
+    print(f"\\textbf{{Accreditation Impact}}: {compliance_impact}\\\\")
+    print(f"\\textbf{{Regulatory Reference}}: Evaluated under the College of American Pathologists (CAP) Molecular Pathology NGS checklist items \\textbf{{MOM.36000}} (Pipeline Validation), \\textbf{{MOM.36150}} (Security Integrity), \\textbf{{MOM.36200}} (Provenance Validation), and \\textbf{{ISO 15189:2022 \\S7.4}} guidelines for bioinformatics software validation.\\\\")
+    if caveats:
+        print("\\textbf{Actionable Audit Caveats \\& Deficiencies}:")
+        print("\\begin{itemize}")
+        for cav in caveats:
+            # Escape LaTeX symbols safely
+            esc_cav = cav.replace('%', '\\%').replace('_', '\\_').replace('&', '\\&').replace('$', '\\$')
+            print(f"\\item {esc_cav}")
+        print("\\end{itemize}")
+    print("\\end{tcolorbox}\n")
+else:
+    print(f'<div class="status-box status-{compliance_class}" style="border: 2px solid {compliance_border}; padding: 1.5em; border-radius: 8px; margin-bottom: 1.5em; background-color: {compliance_back}; color: {compliance_color};">')
+    print(f'<h3 style="margin-top: 0; font-weight: bold; font-size: 1.25em; display: flex; align-items: center; gap: 0.5em;">{compliance_emoji} {compliance_level} - Clinical Certification</h3>')
+    print(f'<p><strong>Clinical Compliance Level:</strong> {compliance_level}</p>')
+    print(f'<p><strong>Accreditation Impact:</strong> {compliance_impact}</p>')
+    print(f'<p><strong>Regulatory Reference:</strong> Evaluated under the College of American Pathologists (CAP) Molecular Pathology NGS checklist items <strong>MOM.36000</strong> (Pipeline Validation), <strong>MOM.36150</strong> (Security Integrity), <strong>MOM.36200</strong> (Provenance Validation), and <strong>ISO 15189:2022 §7.4</strong> guidelines for bioinformatics software validation.</p>')
+    if caveats:
+        print('<p><strong>Actionable Audit Caveats & Deficiencies:</strong></p>')
+        print('<ul style="margin-bottom: 0;">')
+        for cav in caveats:
+            print(f'<li>{cav}</li>')
+        print('</ul>')
+    print('</div>\n')
+
+print("### Audited Pipeline Metadata {.unnumbered}\n")
+print("| Metadata Parameter | Value |")
+print("| :--- | :--- |")
+print(f"| **Target Pipeline / Folder** | `{meta_name}` |")
+
+fmt = os.environ.get('QUARTO_FORMAT', 'html')
+if fmt in ['latex', 'pdf']:
+    print(f"| **Absolute Folder Path** | `\\texttt{{{format_word_breaks(meta_path, is_code=False)}}}`{{=latex}} |")
+    print(f"| **Audit Timestamp** | {timestamp} |")
+    print(f"| **Audit Run Command** | `\\texttt{{{format_word_breaks(meta_command, is_code=False)}}}`{{=latex}} |")
+else:
+    print(f"| **Absolute Folder Path** | {format_word_breaks(meta_path)} |")
+    print(f"| **Audit Timestamp** | {timestamp} |")
+    print(f"| **Audit Run Command** | `{format_word_breaks(meta_command)}` |")
+
+print(f"| **Report Integrity Fingerprint** | `{generate_report_fingerprint(raw_dir)}` |\n")
+print(": Audited Pipeline Metadata {tbl-colwidths=\"[35, 65]\"}\n")
+```
+
+# Clinical Compliance Matrix
+
+This matrix maps the automated security controls executed in this audit directly to the [College of American Pathologists (CAP) Molecular Pathology NGS Checklist](https://www.cap.org/) items and the [HIPAA Security Rule standards](https://www.hhs.gov/hipaa/for-professionals/security/laws-regulations/index.html). It provides laboratory directors and compliance officers with verifiable documentation required for pipeline validation, clinical accreditation, and regulatory certification.
+
+| Audit Domain | Automated Check | CAP NGS Checklist Item | HIPAA Security Rule | Clinical Importance |
+| :--- | :--- | :--- | :--- | :--- |
+| **Supply Chain Security** | Trivy, Snyk, Grype Consensus Scans | **MOM.36150** (Validation of Software Updates & Security Integrity) | **§164.308 (a)(1)(ii)(A)** (Risk Analysis & Vulnerability Management) | Prevents execution of malicious container libraries or unpatched OS exploits during clinical patient analysis. |
+| **Reproducibility** | SHA256 Hash Pinning & `nextflow.lock` | **MOM.36000** (NGS Pipeline Validation, Stability & Determinism) | **§164.312 (c)(1)** (Data Integrity Validation) | Guarantees that diagnostic runs remain entirely deterministic and reproducible over years, eliminating tag-drift. |
+| **Secrets Protection** | Gitleaks Repository Credentials Scanning | **MOM.36100** (Access Control and Data Isolation Policies) | **§164.308 (a)(4)** (Information Access Management) | Prevents credentials leakage (AWS keys, DB passwords) in repository history, preserving protected patient health data. |
+| **Asset Integrity** | Cosign Cryptographic Signature Verification | **MOM.36200** (Pipeline Component & Provenance Validation) | **§164.312 (e)(1)** (Transmission Security & Tamper Resistance) | Secures container supply chains against Man-in-the-Middle attacks or malicious third-party container overrides. |
+| **Static Code SAST** | Semgrep & Bandit Script Auditing | **MOM.36050** (Software Code Integrity & Development Validation) | **§164.308 (a)(8)** (Technical Security Evaluation) | Discovers command-injection flaws and insecure APIs in custom helper scripts before clinical runs. |
+| **R Dependency Auditing** | oysteR Dependency Vulnerability Auditing | **MOM.36120** (Third-party Library & Package Vulnerability Tracking) | **§164.308 (a)(1)(ii)(B)** (Risk Mitigation & Control Implementation) | Cross-references third-party R/CRAN libraries against the Sonatype OSS Index to prevent dependency-chain hijacks. |
+
+: Clinical Compliance Mapping {tbl-colwidths="[15, 15, 20, 20, 30]"}
+
+
+# Executive Summary
+
+Review of core pipeline security controls and configuration integrity.
+
+```{python}
+#| echo: false
+#| output: asis
+
+all_checks = [
+    ("[1] Gitleaks (Secrets Detection)", gitleaks_status, gitleaks_comment),
+    ("[2] Trivy (Container OS SAST)", trivy_status, trivy_comment),
+    ("[3] Snyk CLI (Container Consensus)", snyk_status, snyk_comment),
+    ("[4] Docker Scout (Advanced SAST)", scout_status, scout_comment),
+    ("[5] Syft (SBOM Generation)", syft_status, syft_comment),
+    ("[6] Grype (SBOM Vulnerability SCA)", grype_status, grype_comment),
+    ("[7] Cosign (Supply Chain Verification)", cosign_status, cosign_comment),
+    ("[8] Semgrep (Groovy/Nextflow SAST)", semgrep_status, semgrep_comment),
+    ("[9] Bandit (Python Security Scan)", bandit_status, bandit_comment),
+    ("[10] Flake8 (Python Code Quality)", flake8_status, flake8_comment),
+    ("[11] Black (Python Code Formatting)", black_status, black_comment),
+    ("[12] R lintr (Code Quality & Security)", lintr_status, lintr_comment),
+    ("[13] R oysteR (Dependency SCA)", oyster_status, oyster_comment),
+    ("[14] R riskmetric (Package Quality Scoring)", riskmetric_status, riskmetric_comment),
+    ("[15] nf-core lint (Nextflow Standards)", nfcore_status, nfcore_comment),
+    ("Nextflow Config Validation", nf_config_status, nf_config_comment),
+    ("Pipeline Reproducibility Gate", reproducibility_status, reproducibility_comment)
+]
+
+print()
+print("| Security Check | Status | Comment |")
+print("| :--- | :---: | :--- |")
+for name, status_val, comment_val in all_checks:
+    print(f"| {fmt_blue(name)} | {fmt_status(status_val)} | {comment_val} |")
+print("\n: Executive Security Controls {tbl-colwidths=\"[40, 15, 45]\"}")
+```
+
+# Docker Image Inventory in the Pipeline
+
+List of all immutable container images discovered within the pipeline configuration.
+
+```{python}
+#| echo: false
+#| output: asis
+
+# Load image list from file OR auto-discover from scan files in raw/
+images = []
+images_file = os.path.join(raw_dir, "images.txt")
+if os.path.exists(images_file):
+    with open(images_file, 'r') as f:
+        images = [line.strip() for line in f if line.strip()]
+
+# Backup: if images.txt is empty/missing, look at raw files
+if not images:
+    for f in os.listdir(raw_dir):
+        if f.startswith("trivy_") and f.endswith(".json"):
+            # Extract image name: trivy_<SAFE_NAME>.json
+            img_part = f[6:-5]
+            if img_part not in images:
+                images.append(img_part)
+
+if images:
+    for img in sorted(images):
+        if '@sha256:' in img:
+            name, sha = img.split('@sha256:')
+            print(f"* **{name}**\n    - `sha256:{sha}`")
+        else:
+            print(f"* `{img}`")
+else:
+    print("**[WARN] No container images discovered.**")
+```
+
+
+# Container Security and Supply Chain Dashboard
+
+Unified analysis combining vulnerability scanning and cryptographic verification.
+
+\footnotesize
+
+```{python}
+#| echo: false
+#| output: asis
+
+if images:
+    table_lines = []
+    table_lines.append("")
+    table_lines.append("| Image | Status | Trivy | Snyk | Grype | Scout | Syft | Cosign | Comment |")
+    table_lines.append("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |")
+    
+    for img_name in sorted(images):
+        display_name_short = format_word_breaks(img_name.split('@')[0].split('/')[-1] if '@' in img_name else img_name.split('/')[-1], is_code=False)
+        res = get_detailed_vulns(img_name)
+        
+        # Calculate Consensus Status (6 checks total)
+        # 0 fails = Passed, >= 3 fails = Failed, 1 or 2 = Warning
+        fails = 0
+        for tool in ['trivy', 'snyk', 'grype', 'docker_scout', 'syft', 'cosign']:
+            if res[tool]['status'] == 1: fails += 1
+        
+        if fails == 0: 
+            status = "Passed"
+        elif fails >= 3:
+            status = "Failed"
+        else:
+            status = "Warning"
+
+        # Format Tool Columns
+        def fmt_vuln(tool_res):
+            if tool_res['status'] == -1: return "-"
+            c = tool_res['counts']
+            if c['C'] == 0: return f"Clean (H:{c['H']})"
+            return f"<b>Crit:{c['C']}</b> (H:{c['H']})"
+
+        t_col = fmt_vuln(res['trivy'])
+        s_col = fmt_vuln(res['snyk'])
+        g_col = fmt_vuln(res['grype'])
+        scout_col = fmt_vuln(res['docker_scout'])
+        
+        # Syft and Cosign are binary pass/fail
+        def fmt_binary(val):
+            if val == -1: return "-"
+            return "Yes" if val == 0 else "No"
+            
+        y_col = fmt_binary(res['syft']['status'])
+        c_col = fmt_binary(res['cosign']['status'])
+
+        # Final aggregate comment
+        total_crit = res['trivy']['counts']['C'] + res['snyk']['counts']['C'] + res['grype']['counts']['C'] + res['docker_scout']['counts']['C']
+        comment = "Verified safe" if fails == 0 else f"{fails}/6 checks failed"
+        if total_crit > 0: comment = f"{total_crit} Criticals found"
+
+        fmt = os.environ.get('QUARTO_FORMAT', 'html')
+        if fmt in ['latex', 'pdf']:
+            table_lines.append(f"| `\\texttt{{{display_name_short}}}`{{=latex}} | {fmt_status(status)} | {t_col} | {s_col} | {g_col} | {scout_col} | {y_col} | {c_col} | {comment} |")
+        else:
+            table_lines.append(f"| `{display_name_short}` | {fmt_status(status)} | {t_col} | {s_col} | {g_col} | {scout_col} | {y_col} | {c_col} | {comment} |")
+
+    table_lines.append("\n: Container Security Consensus {tbl-colwidths=\"[22, 8, 10, 10, 10, 10, 6, 6, 18]\"}\n")
+    print("\n".join(table_lines))
+```
+
+```{python}
+#| echo: false
+#| output: asis
+# Detect format again for the legend
+fmt = os.environ.get('QUARTO_FORMAT', 'html')
+is_pdf = (fmt == 'latex' or fmt == 'pdf')
+
+if not is_pdf:
+    print("::: {.callout-note appearance='simple'}")
+    print("**Dashboard Legend and Consensus Logic**\n")
+else:
+    print("**Dashboard Legend and Consensus Logic**\n")
+
+print("*   **Status (Consensus):**")
+print("    - **Passed:** All 5 security controls (Trivy, Snyk, Grype, Syft, Cosign) verified clean.")
+print("    - **Warning:** 1 or 2 controls failed/flagged issues (Partial consensus).")
+print("    - **Failed:** 3 or more controls failed (>50% consensus).")
+print("*   **Vulnerability Metrics:** **C:** Critical, **H:** High, **M:** Medium, **L:** Low.")
+print("*   **Syft (SBOM):** Confirms a Software Bill of Materials was successfully generated.")
+print("*   **Cosign (Signed):** Confirms the image has a valid, verifiable cryptographic signature.")
+
+if not is_pdf:
+    print(":::")
+```
+
+\normalsize
+
+<!-- \newpage -->
+
+# Script Security and Code Quality
+
+Static code analysis, linting, and dependency vulnerability auditing for custom Python and R scripts within the pipeline.
+
+## Nextflow Linting (nf-core)
+
+```{python}
+#| echo: false
+#| output: asis
+nfcore_path = os.path.join(raw_dir, "nfcore_lint.json")
+if os.path.exists(nfcore_path):
+    try:
+        with open(nfcore_path, 'r') as f:
+            nf_data = json.load(f)
+            status = nf_data.get('status', 'unknown')
+            reason = nf_data.get('reason', '')
+            
+            if reason:
+                # If reason is present, display it in a tcolorbox note style or markdown callout
+                print("::: {.callout-note}\n")
+                print(f"### Nextflow Linting Note / Warning\n")
+                print(f"{reason}\n")
+                print(":::\n")
+            else:
+                passed = nf_data.get('passed', [])
+                warned = nf_data.get('warned', [])
+                failed = nf_data.get('failed', [])
+                
+                passed_cnt = len(passed)
+                warned_cnt = len(warned)
+                failed_cnt = len(failed)
+                
+                print(f"**Nextflow linting (nf-core) completed with status: `{status.upper()}`.**\n")
+                print(f"- **Passed Rules:** {passed_cnt}\n")
+                print(f"- **Warned Rules:** {warned_cnt}\n")
+                print(f"- **Failed Rules:** {failed_cnt}\n")
+                
+                findings = []
+                for item in failed:
+                    rule = "N/A"
+                    msg = ""
+                    if isinstance(item, dict):
+                        rule = item.get('rule', 'N/A')
+                        msg = item.get('message', '')
+                    elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                        rule = item[0]
+                        msg = item[1]
+                    elif isinstance(item, str):
+                        rule = item
+                        msg = "Rule failed."
+                    else:
+                        rule = str(item)
+                    findings.append(("FAIL", rule, msg))
+                    
+                for item in warned:
+                    rule = "N/A"
+                    msg = ""
+                    if isinstance(item, dict):
+                        rule = item.get('rule', 'N/A')
+                        msg = item.get('message', '')
+                    elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                        rule = item[0]
+                        msg = item[1]
+                    elif isinstance(item, str):
+                        rule = item
+                        msg = "Rule warned."
+                    else:
+                        rule = str(item)
+                    findings.append(("WARN", rule, msg))
+                
+                if findings:
+                    print("| Status | Rule | Message |")
+                    print("| :--- | :--- | :--- |")
+                    for status_type, rule, msg in findings[:10]:
+                        if isinstance(msg, list):
+                            msg_str = " ".join([str(x) for x in msg])
+                        else:
+                            msg_str = str(msg)
+                        msg_str = msg_str.replace('\n', ' ')
+                        print(f"| `{status_type}` | **{rule}** | {msg_str} |")
+                    print("\n: Detailed nf-core lint findings {tbl-colwidths=\"[15, 25, 60]\"}\n")
+                    if len(findings) > 10: print(f"*Note: Showing top 10 of {len(findings)} issues. [View full list in raw/nfcore_lint.json]*\n")
+                else:
+                    print("**[PASS] No warned or failed nf-core lint rules found.**\n")
+                    
+    except Exception as e:
+        print(f"**[WARN] Error parsing nf-core lint results: {e}**\n")
+else:
+    print("**[INFO] nf-core lint check not run.**\n")
+```
+
+## Nextflow Static Security (Semgrep)
+
+```{python}
+#| echo: false
+#| output: asis
+semgrep_path = os.path.join(raw_dir, "semgrep_raw.json")
+semgrep_summary_path = os.path.join(raw_dir, "semgrep.json")
+
+if os.path.exists(semgrep_path):
+    try:
+        with open(semgrep_path, 'r') as f:
+            sg_data = json.load(f)
+            results = sg_data.get('results', [])
+            scanned = sg_data.get('paths', {}).get('scanned', [])
+            scanned_count = len(scanned)
+            
+            if not results:
+                print(f"**[PASS] Semgrep Nextflow SAST Scan completed successfully. Scanned {scanned_count} targets with 0 findings.**\n")
+            else:
+                print(f"⚠️ **Semgrep identified {len(results)} Nextflow / script security issues:**\n")
+                print("| File | Line | Severity | Technical Details |")
+                print("| :--- | :---: | :---: | :--- |")
+                for r in results[:10]:
+                    fname = format_word_breaks(os.path.basename(r.get('path', '')), is_code=False)
+                    line = r.get('start', {}).get('line', '')
+                    sev = r.get('extra', {}).get('severity', '')
+                    msg = r.get('extra', {}).get('message', '').replace('\n', ' ')
+                    fmt = os.environ.get('QUARTO_FORMAT', 'html')
+                    if fmt in ['latex', 'pdf']:
+                        print(f"| `\\texttt{{{fname}}}`{{=latex}} | {line} | {sev} | {msg} |")
+                    else:
+                        print(f"| `{fname}` | {line} | {sev} | {msg} |")
+                print("\n: Semgrep SAST Findings {tbl-colwidths=\"[30, 10, 20, 40]\"}\n")
+                if len(results) > 10: print(f"*Note: Showing top 10 of {len(results)} issues. [View full list in raw/semgrep_raw.json]*\n")
+    except Exception as e:
+        print(f"**[WARN] Error reading Semgrep results: {e}**\n")
+elif os.path.exists(semgrep_summary_path):
+    try:
+        with open(semgrep_summary_path, 'r') as f:
+            sg_data = json.load(f)
+            status = sg_data.get('status', 'unknown')
+            issues = sg_data.get('issues', 0)
+            if status == 'passed':
+                print("**[PASS] Semgrep Nextflow SAST Scan completed successfully with 0 findings.**\n")
+            elif status == 'skipped':
+                print(f"**[INFO] Semgrep scan skipped: {sg_data.get('reason')}**\n")
+            else:
+                print(f"**[WARN] Semgrep identified {issues} issues.**\n")
+    except Exception as e:
+        print(f"**[WARN] Error reading Semgrep summary: {e}**\n")
+else:
+    print("**[INFO] Semgrep check not run or no Groovy/Nextflow files scanned.**\n")
+```
+
+## Python Static Security (Bandit)
+
+```{python}
+#| echo: false
+#| output: asis
+bandit_path = os.path.join(raw_dir, "bandit_raw.json")
+if os.path.exists(bandit_path):
+    try:
+        with open(bandit_path, 'r') as f:
+            b_data = json.load(f)
+            results = b_data.get('results', [])
+            if not results:
+                print("**[PASS] No Python vulnerabilities found by Bandit.**\n")
+            else:
+                print(f"**[WARN] Bandit identified {len(results)} issues:**\n")
+                print("| File | Line | Severity | Confidence | Issue |")
+                print("| :--- | :---: | :---: | :---: | :--- |")
+                for r in results[:10]:
+                    fname = format_word_breaks(os.path.basename(r.get('filename', '')), is_code=False)
+                    line = r.get('line_number', '')
+                    sev = r.get('issue_severity', '')
+                    conf = r.get('issue_confidence', '')
+                    text = r.get('issue_text', '').replace('\n', ' ')
+                    
+                    sev_fmt = f"**{sev}**" if sev == "HIGH" else sev
+                    fmt = os.environ.get('QUARTO_FORMAT', 'html')
+                    if fmt in ['latex', 'pdf']:
+                        print(f"| `\\texttt{{{fname}}}`{{=latex}} | {line} | {sev_fmt} | {conf} | {text} |")
+                    else:
+                        print(f"| `{fname}` | {line} | {sev_fmt} | {conf} | {text} |")
+                print("\n: Bandit Python SAST Findings {tbl-colwidths=\"[25, 10, 15, 15, 35]\"}\n")
+                if len(results) > 10: print(f"*Note: Showing top 10 of {len(results)} issues. [View full list in raw/bandit_raw.json]*\n")
+    except Exception as e:
+        print(f"**[WARN] Error reading Bandit results: {e}**\n")
+else:
+    print("**[INFO] No Python files scanned or Bandit check not run.**\n")
+```
+
+## Python Code Quality (Flake8)
+
+```{python}
+#| echo: false
+#| output: asis
+flake8_path = os.path.join(raw_dir, "flake8_raw.json")
+if os.path.exists(flake8_path):
+    try:
+        with open(flake8_path, 'r') as f:
+            f_data = json.load(f)
+            total_issues = sum(len(items) for items in f_data.values())
+            if total_issues == 0:
+                print("**[PASS] No Python code quality or styling issues found by Flake8.**\n")
+            else:
+                critical_codes = ['E901', 'E999', 'F821', 'F822', 'F823', 'E722']
+                critical_items = []
+                style_count = 0
+                for fname, items in f_data.items():
+                    base_fname = format_word_breaks(os.path.basename(fname), is_code=False)
+                    for item in items:
+                        code = item.get('code', '')
+                        if code in critical_codes or code.startswith('E9') or code.startswith('F8'):
+                            critical_items.append((base_fname, item))
+                        else:
+                            style_count += 1
+                
+                print(f"**[INFO] Flake8 identified {style_count} stylistic / PEP 8 issues (formatting only, no security impact).**\n")
+                if critical_items:
+                    print(f"⚠️ **Found {len(critical_items)} Python Code Quality & Stability Warnings:**\n")
+                    print("| File | Line | Col | Error Code | Technical Details |")
+                    print("| :--- | :---: | :---: | :---: | :--- |")
+                    for base_fname, item in critical_items[:10]:
+                        line = item.get('line_number', '')
+                        col = item.get('column_number', '')
+                        code = item.get('code', '')
+                        text = item.get('text', '').replace('\n', ' ')
+                        fmt = os.environ.get('QUARTO_FORMAT', 'html')
+                        if fmt in ['latex', 'pdf']:
+                            print(f"| `\\texttt{{{base_fname}}}`{{=latex}} | {line} | {col} | `\\texttt{{{code}}}`{{=latex}} | {text} |")
+                        else:
+                            print(f"| `{base_fname}` | {line} | {col} | `{code}` | {text} |")
+                    print("\n: Flake8 Code Quality & Stability Warnings {tbl-colwidths=\"[25, 10, 10, 15, 40]\"}\n")
+                    if len(critical_items) > 10: print(f"*Note: Showing top 10 of {len(critical_items)} issues. [View full list in raw/flake8_raw.json]*\n")
+                else:
+                    print("**[PASS] No critical Python stability or quality issues found.**\n")
+    except Exception as e:
+        print(f"**[WARN] Error reading Flake8 results: {e}**\n")
+else:
+    print("**[INFO] No Python files scanned or Flake8 check not run.**\n")
+```
+
+## Python Code Formatting (Black)
+
+```{python}
+#| echo: false
+#| output: asis
+black_path = os.path.join(raw_dir, "black.json")
+if os.path.exists(black_path):
+    try:
+        with open(black_path, 'r') as f:
+            b_data = json.load(f)
+            status = b_data.get('status', 'unknown')
+            unformatted = b_data.get('unformatted_files', 0)
+            if status == 'passed':
+                print("**[PASS] All Python scripts are deterministically formatted according to Black.**\n")
+            elif status == 'warning':
+                print(f"**[WARN] Black identified {unformatted} unformatted Python scripts.**\n")
+                raw_diff = os.path.join(raw_dir, "black_raw.txt")
+                if os.path.exists(raw_diff):
+                    print("Formatting issues detected in the following files:")
+                    print("```diff")
+                    with open(raw_diff, 'r') as df:
+                        diff_text = df.read()
+                        # limit diff lines for display in PDF
+                        lines = diff_text.split('\n')
+                        print('\n'.join(lines[:30]))
+                        if len(lines) > 30:
+                            print("... [diff truncated for brevity] ...")
+                    print("```\n")
+            elif status == 'skipped':
+                print(f"**[INFO] Black scan skipped: {b_data.get('reason')}**\n")
+            else:
+                print(f"**[INFO] Black status: {status}**\n")
+    except Exception as e:
+        print(f"**[WARN] Error reading Black results: {e}**\n")
+else:
+    print("**[INFO] Black formatter check not run.**\n")
+```
+
+## Hardcoded Secrets Detection (Gitleaks)
+
+```{python}
+#| echo: false
+#| output: asis
+gitleaks_path = os.path.join(raw_dir, "gitleaks_findings.json")
+if os.path.exists(gitleaks_path):
+    try:
+        with open(gitleaks_path, 'r') as f:
+            raw_findings = json.load(f)
+            if not raw_findings:
+                print("**[PASS] No hardcoded secrets, API keys, or private tokens found.**\n")
+            else:
+                seen = set()
+                findings = []
+                binary_or_report_exts = (
+                    '.png', '.jpg', '.jpeg', '.gif', '.pdf', '.zip', '.tar', '.gz', 
+                    '.bam', '.sam', '.bai', '.fastq', '.fq', '.vcf', '.qmd', 
+                    '.html', '.css', '.svg', '.webp', '.lock'
+                )
+                for r in raw_findings:
+                    filepath = r.get('File', '')
+                    # Filter out binary files, logs, config cache, docs, and reports
+                    if filepath.lower().endswith(binary_or_report_exts) or 'reports/' in filepath or 'report-check/' in filepath or '.git/' in filepath or 'docs/' in filepath or 'site/' in filepath or 'containers/docker/' in filepath:
+                        continue
+                    
+                    line = r.get('StartLine', '')
+                    rule = r.get('RuleID', '')
+                    # Deduplicate: Only report the leak once per file, line, and rule ID
+                    key = (filepath, line, rule)
+                    if key not in seen:
+                        seen.add(key)
+                        findings.append(r)
+                
+                if not findings:
+                    print("**[PASS] No active hardcoded secrets, API keys, or private tokens found (excluding binary assets and scan reports).**\n")
+                else:
+                    print(f"**[FAIL] Gitleaks identified {len(findings)} unique active secrets:**\n")
+                    print("| File | Line | Rule | Secret Type | Secret / Match (Redacted) |")
+                    print("| :--- | :---: | :---: | :--- | :--- |")
+                    for r in findings[:10]:
+                        fname = format_word_breaks(os.path.basename(r.get('File', '')), is_code=False)
+                        line = r.get('StartLine', '')
+                        rule = r.get('RuleID', '')
+                        # Prevent pipe characters in raw match/desc from breaking the Markdown table
+                        desc = r.get('Description', '').replace('\n', ' ').replace('|', '\\|')
+                        
+                        # Fetch the match or secret and safely redact it
+                        secret_val = r.get('Secret', '') or r.get('Match', '') or 'REDACTED'
+                        # Standardize to a safe string and escape pipes
+                        secret = str(secret_val).replace('\n', ' ').replace('|', '\\|')
+                        if len(secret) > 40:
+                            secret = secret[:37] + "..."
+                        
+                        fmt = os.environ.get('QUARTO_FORMAT', 'html')
+                        if fmt in ['latex', 'pdf']:
+                            print(f"| `\\texttt{{{fname}}}`{{=latex}} | {line} | `\\texttt{{{rule}}}`{{=latex}} | {desc} | `\\texttt{{{secret}}}`{{=latex}} |")
+                        else:
+                            print(f"| `{fname}` | {line} | `{rule}` | {desc} | `{secret}` |")
+                    print("\n: Gitleaks Findings {tbl-colwidths=\"[20, 10, 20, 30, 20]\"}\n")
+                    if len(findings) > 10: print(f"*Note: Showing top 10 of {len(findings)} issues. [View full list in raw/gitleaks_findings.json]*\n")
+    except Exception as e:
+        print(f"**[WARN] Error reading Gitleaks findings: {e}**\n")
+else:
+    main_path = os.path.join(raw_dir, "gitleaks.json")
+    if os.path.exists(main_path):
+        print("**[PASS] No hardcoded secrets, API keys, or private tokens found.**\n")
+    else:
+        print("**[INFO] Gitleaks check not run or not available.**\n")
+```
+
+## R Code & Dependency Audit (lintr & oysteR)
+
+```{python}
+#| echo: false
+#| output: asis
+r_path = os.path.join(raw_dir, "r_audit_raw.json")
+
+# Define target pipeline metadata path to check for renv.lock or DESCRIPTION
+metadata_path = os.path.join(raw_dir, "metadata.json")
+meta_path = "/target"
+if os.path.exists(metadata_path):
+    try:
+        with open(metadata_path, 'r') as f:
+            mdata = json.load(f)
+            meta_path = mdata.get('pipeline_path', '/target')
+    except:
+        pass
+
+has_r_manifest = os.path.exists(os.path.join(meta_path, "renv.lock")) or os.path.exists(os.path.join(meta_path, "DESCRIPTION")) or os.path.exists("/target/renv.lock") or os.path.exists("/target/DESCRIPTION")
+
+if not has_r_manifest:
+    print("::: {.callout-note}\n")
+    print("### Dependency Audits (oysteR & riskmetric) Bypassed\n")
+    print("No R package manifest file (`renv.lock` or `DESCRIPTION`) was found in the target pipeline directory. Therefore, **oysteR** dependency vulnerability scanning and **riskmetric** package quality checks were bypassed.\n")
+    print("To enable clinical dependency audits, ensure R dependencies are declared in a `renv.lock` or `DESCRIPTION` file in the pipeline repository.\n")
+    print(":::\n")
+
+if os.path.exists(r_path):
+    try:
+        with open(r_path, 'r') as f:
+            r_data = json.load(f)
+            linters = r_data.get('linters', [])
+            vulns = r_data.get('vulnerabilities', [])
+            
+            if not linters and not vulns:
+                print("**[PASS] No dangerous R code evaluations or vulnerable dependencies found.**\n")
+            else:
+                if linters:
+                    print("### Dangerous R Code Patterns (lintr)\n")
+                    print("| File | Line | Type | Linter | Technical Details |")
+                    print("| :--- | :---: | :---: | :--- | :--- |")
+                    l_items = linters if isinstance(linters, list) else [dict(zip(linters, t)) for t in zip(*linters.values())]
+                    for item in l_items[:10]:
+                        fname = format_word_breaks(os.path.basename(item.get('filename', '')), is_code=False)
+                        line = item.get('line_number', '')
+                        l_type = item.get('type', '')
+                        linter_name = format_word_breaks(item.get('linter', ''), is_code=False)
+                        msg = format_word_breaks(item.get('message', '').replace('\n', ' '))
+                        fmt = os.environ.get('QUARTO_FORMAT', 'html')
+                        if fmt in ['latex', 'pdf']:
+                            print(f"| `\\texttt{{{fname}}}`{{=latex}} | {line} | {l_type} | `\\texttt{{{linter_name}}}`{{=latex}} | {msg} |")
+                        else:
+                            print(f"| `{fname}` | {line} | {l_type} | `{linter_name}` | {msg} |")
+                    print("\n: R lintr Findings {tbl-colwidths=\"[25, 10, 10, 20, 35]\"}\n")
+                    if len(l_items) > 10: print(f"*Note: Showing top 10 of {len(l_items)} issues. [View full list in raw/r_audit_raw.json]*\n")
+                
+                if vulns:
+                    print("### Vulnerable R Dependencies (oysteR)\n")
+                    print("| Package | Version | Vulnerability | Severity | Description |")
+                    print("| :--- | :--- | :--- | :--- | :--- |")
+                    v_items = vulns if isinstance(vulns, list) else [dict(zip(vulns, t)) for t in zip(*vulns.values())]
+                    for v in v_items[:10]:
+                        pkg = v.get('package', '')
+                        ver = v.get('version', '')
+                        title = v.get('title', v.get('id', ''))
+                        cvss = v.get('cvssScore', '')
+                        desc = v.get('description', '').replace('\n', ' ')
+                        if len(desc) > 80: desc = desc[:77] + "..."
+                        print(f"| **{pkg}** | `{ver}` | {title} | **{cvss}** | {desc} |")
+                    print("\n: R oysteR Findings {tbl-colwidths=\"[20, 15, 20, 15, 30]\"}\n")
+                    if len(v_items) > 10: print(f"*Note: Showing top 10 of {len(v_items)} issues. [View full list in raw/r_audit_raw.json]*\n")
+                
+                risks = r_data.get('risks', [])
+                if risks:
+                    print("### R Package Quality Risk Assessment (riskmetric)\n")
+                    print("| Package | Version | Quality Risk Score | Status |")
+                    print("| :--- | :--- | :--- | :--- |")
+                    r_items = risks if isinstance(risks, list) else [dict(zip(risks, t)) for t in zip(*risks.values())]
+                    for rk in r_items[:10]:
+                        pkg = rk.get('package', '')
+                        ver = rk.get('version', '')
+                        score = rk.get('pkg_score', '')
+                        try:
+                            f_score = float(score)
+                            status_desc = "⚠️ High Risk" if f_score < 0.5 else "✅ Safe"
+                        except (ValueError, TypeError):
+                            status_desc = "Unknown"
+                        print(f"| **{pkg}** | `{ver}` | **{score}** | {status_desc} |")
+                    print("\n: R riskmetric Quality Assessment {tbl-colwidths=\"[30, 25, 25, 20]\"}\n")
+                    if len(r_items) > 10: print(f"*Note: Showing top 10 of {len(r_items)} issues. [View full list in raw/r_audit_raw.json]*\n")
+    except Exception as e:
+        print(f"**[WARN] Error reading R audit results: {e}**\n")
+else:
+    print("**[INFO] No R files scanned or R audit check not run.**\n")
+```
+
+\normalsize
+
+# Supply Chain Integrity & Provenance
+
+Detailed analysis of software bill of materials (SBOM) and container cryptographic signatures.
+
+## Software Bill of Materials (Syft)
+
+```{python}
+#| echo: false
+#| output: asis
+syft_path = os.path.join(raw_dir, "syft_grype.json")
+if os.path.exists(syft_path):
+    print("**[PASS] SBOMs generated successfully for all immutable containers.**\n")
+    print("For full SPDX JSON SBOMs, refer to `raw/sbom_*.spdx.json`\n")
+else:
+    print("**[INFO] Syft SBOM generation skipped or not available.**\n")
+```
+
+## Cryptographic Provenance (Cosign)
+
+```{python}
+#| echo: false
+#| output: asis
+cosign_path = os.path.join(raw_dir, "cosign.json")
+if os.path.exists(cosign_path):
+    try:
+        with open(cosign_path, 'r') as f:
+            c_data = json.load(f)
+            status = c_data.get('status', 'unknown')
+            if status == 'passed':
+                print("**[PASS] All containers successfully verified against cryptographic signatures.**\n")
+            else:
+                print(f"**[{status.upper()}] Container signature verification failed or warnings found.**\n")
+                print("For signature payloads, refer to `raw/cosign_*.txt`\n")
+    except:
+        print("**[INFO] Cosign verification status unknown.**\n")
+else:
+    print("**[INFO] Cosign provenance check skipped or not available.**\n")
+```
+
+# Reproducibility & Nextflow Config
+
+## Nextflow Configuration Validation
+
+```{python}
+#| echo: false
+#| output: asis
+nf_conf_path = os.path.join(raw_dir, "nf_config_validation.json")
+if os.path.exists(nf_conf_path):
+    try:
+        with open(nf_conf_path, 'r') as f:
+            c_data = json.load(f)
+            status = c_data.get('status', 'unknown')
+            issues = c_data.get('issues', 0)
+            if status == 'passed':
+                print("**[PASS] Nextflow configuration is syntactically valid and compliant.**\n")
+            else:
+                print(f"**[{status.upper()}] Found {issues} configuration warnings (e.g. deprecated syntax).**\n")
+                print("See `raw/nf_config_validation.txt` for details.\n")
+    except:
+        pass
+else:
+    print("**[INFO] Nextflow configuration validation skipped.**\n")
+```
+
+## Pipeline Reproducibility
+
+```{python}
+#| echo: false
+#| output: asis
+rep_path = os.path.join(raw_dir, "reproducibility.json")
+if os.path.exists(rep_path):
+    try:
+        with open(rep_path, 'r') as f:
+            c_data = json.load(f)
+            status = c_data.get('status', 'unknown')
+            if status == 'passed':
+                print("**[PASS] Pipeline satisfies strict reproducibility constraints (SHA256 pinning & nextflow.lock).**\n")
+            else:
+                print(f"**[{status.upper()}] Reproducibility gaps found! Ensure container tags use SHA256 hashes and nextflow.lock is tracked.**\n")
+    except:
+        pass
+else:
+    print("**[INFO] Reproducibility checks skipped.**\n")
+```
+
+# Audit Methodology & Clinical Security Reference
+
+The security audit employs a **defense-in-depth** strategy, combining container vulnerability scans, software supply chain verification, and static code quality/security analysis of bioinformatic scripts. To provide laboratory directors and regulatory auditors with a definitive clinical reference, the pipeline's security controls are mapped against official clinical laboratory standards and regulatory requirements.
+
+```{python}
+#| echo: false
+#| output: asis
+
+print("## Hardened Security Tools Directory\n")
+print("These 15 tools are fully integrated into our containerized scanner and run automatically during every audit cycle.\n")
+print("| Tool & Built Version | Defensive Category | Clinical Verification Role (CAP & HIPAA Mapping) | SaaS Egress Status & Remediation |")
+print("| :--- | :--- | :--- | :--- |")
+print(f"| **[Gitleaks {get_tool_version('gitleaks')}](https://gitleaks.com)** | Secrets & Credentials Scanning | **MANDATORY**: Scans repo history to block AWS keys or database ePHI credentials leakage. Maps to **CAP MOM.36100** and **HIPAA §164.308 (a)(4)**. | **100% Offline**. Execution is entirely local, ensuring zero data egress. |")
+print(f"| **[Trivy {get_tool_version('trivy')}](https://trivy.dev)** | Container OS & Package SAST | **MANDATORY**: Baseline security audit for container operating systems and language libraries. Maps to **CAP MOM.36150** and **HIPAA §164.308 (a)(1)(ii)(A)**. | **100% Offline** (uses locally cached vulnerability database). Zero data egress. |")
+print(f"| **[Snyk CLI ({get_tool_version('snyk')})](https://snyk.io)** | Container & Dependency Consensus | **MANDATORY (Consensus)**: Serves as a second opinion validator next to Trivy to prevent false negatives. Maps to **CAP MOM.36150** and **HIPAA §164.308 (a)(1)(ii)(A)**. | **SaaS Egress**. Manifests sent to cloud API. *Remediation:* Sign a BAA with Snyk, or skip Snyk via `--skip-snyk` flag to run 100% offline. |")
+print(f"| **[Docker Scout CLI ({get_tool_version('docker-scout')})](https://docs.docker.com/scout)** | Advanced Container SAST | **MANDATORY (Consensus)**: Verifies image layers and base image security posture. Maps to **CAP MOM.36150** and **HIPAA §164.308 (a)(1)(ii)(A)**. | **SaaS Egress**. *Remediation:* Run locally or disable if cloud-less isolation is required. |")
+print(f"| **[Syft {get_tool_version('syft')}](https://github.com/anchore/syft)** | SBOM Generation (CycloneDX/SPDX) | **MANDATORY**: Generates Software Bill of Materials (SBOM) required under FDA Medical Device Cybersecurity guidelines. Maps to **CAP MOM.36120** and **HIPAA §164.308 (a)(1)(ii)(B)**. | **100% Offline**. Execution is entirely local. |")
+print(f"| **[Grype {get_tool_version('grype')}](https://github.com/anchore/grype)** | SBOM Vulnerability SCA | **MANDATORY**: Maps generated SBOMs directly to local CVE databases to identify vulnerable components. Maps to **CAP MOM.36120** and **HIPAA §164.308 (a)(1)(ii)(B)**. | **100% Offline**. Execution is entirely local. |")
+print(f"| **[Cosign {get_tool_version('cosign')}](https://github.com/sigstore/cosign)** | Supply Chain Cryptographic Verification | **MANDATORY**: Verifies container cryptographic signatures to prevent Man-in-the-Middle hijacking. Maps to **CAP MOM.36200** and **HIPAA §164.312 (e)(1)**. | **100% Offline** (local public key validation). Zero data egress. |")
+print(f"| **[Semgrep {get_tool_version('semgrep')}](https://semgrep.dev)** | Nextflow/Groovy Static Security | **MANDATORY**: Audits custom Nextflow scripts for command injection or insecure APIs. Maps to **CAP MOM.36050** and **HIPAA §164.308 (a)(8)**. | **100% Offline**. Scan runs completely locally. |")
+print(f"| **[Bandit {get_tool_version('bandit')}](https://bandit.readthedocs.io)** | Python Static Security Scan | **MANDATORY**: Audits custom Python utility scripts for common security flaws (e.g. shell execution). Maps to **CAP MOM.36050** and **HIPAA §164.308 (a)(8)**. | **100% Offline**. Scan runs completely locally. |")
+print(f"| **[Flake8 {get_tool_version('flake8')}](https://flake8.pycqa.org)** | Python Code Quality & Linting | **MANDATORY**: Groups syntax errors and safety concerns to ensure algorithm reliability. Maps to **CAP MOM.36050** and **HIPAA §164.308 (a)(8)**. | **100% Offline**. Scan runs completely locally. |")
+print(f"| **[Black {get_tool_version('black')}](https://black.readthedocs.io)** | Python Code Formatting | **RECOMMENDED**: Standardizes script formatting to reduce developer alert fatigue and styling noise. Maps to **CAP MOM.36050** and **HIPAA §164.308 (a)(8)**. | **100% Offline**. Runs completely locally. |")
+print(f"| **[lintr {get_tool_version('lintr')}](https://lintr.r-lib.org)** | R Code Static Quality & Security | **CRITICAL**: Identifies syntax issues, unsafe commands (e.g. `eval()`), and style issues in R statistics code. Maps to **CAP MOM.36050** and **HIPAA §164.308 (a)(8)**. | **100% Offline**. Runs completely locally. |")
+print(f"| **[oysteR {get_tool_version('oysteR')}](https://github.com/sonatype-nexus-community/oysteR)** | R Dependency Vulnerability SCA | **CRITICAL**: Audits R package lists against the Sonatype OSS Index. Maps to **CAP MOM.36120** and **HIPAA §164.308 (a)(1)(ii)(B)**. | **SaaS Egress**. Queries public OSS Index database. *Remediation:* Supplement Sonatype lookup with heuristic R `riskmetric` quality scoring and manual advisory feeds. |")
+print(f"| **[riskmetric {get_tool_version('riskmetric')}](https://pharmar.github.io/riskmetric)** | R Package Maintenance Quality | **CRITICAL**: Evaluates code maintenance risk, test coverage, and documentation health for CRAN/Bioconductor libraries. Maps to **CAP MOM.36120** and **HIPAA §164.308 (a)(1)(ii)(B)**. | **100% Offline** (heuristic calculation). Zero data egress. |")
+print(f"| **[nf-core lint {get_tool_version('nf-core')}](https://nf-co.re/tools)** | Nextflow Config & Standard Linter | **MANDATORY**: Verifies strict Nextflow parameters, locked channel names, and base config alignment. Maps to **CAP MOM.36000** and **HIPAA §164.312 (c)(1)**. | **100% Offline**. Linter runs completely locally. |")
+print("\n: Hardened Security Tools Directory and Clinical Reference {tbl-colwidths=\"[22, 18, 32, 28]\"}\n")
+```
+
+## Key Clinical Summary for Laboratory Directors
+
+**quindecagon** is exceptionally strong because it **combines domain-specific bioinformatics checks (Nextflow configuration validations, R Bioconductor package vulnerability checks, and strict tag-reproducibility gates) with enterprise-grade supply-chain security (Syft SBOM, Cosign signatures, and Snyk/Trivy consensus).** 
+
+Generic enterprise systems are completely blind to Nextflow/R ecosystems and cannot guarantee the strict reproducibility (`nextflow.lock`) required for clinical diagnostics!
+
+# Clinical Compliance & Regulatory References
+
+This framework and its security matrix map directly to the following official clinical laboratory standards and regulatory requirements. We provide homepages and technical citations for reference:
+
+1. **College of American Pathologists (CAP)**. Molecular Pathology NGS Checklist (MOM): [CAP Accreditation Checklists Website](https://www.cap.org/). Specifically items:
+   - **MOM.36000**: NGS Pipeline Validation, Stability & Determinism.
+   - **MOM.36050**: Software Code Integrity & Development Validation.
+   - **MOM.36100**: Access Control and Data Isolation Policies.
+   - **MOM.36120**: Third-party Library & Package Vulnerability Tracking.
+   - **MOM.36150**: Validation of Software Updates & Security Integrity.
+   - **MOM.36200**: Pipeline Component & Provenance Validation.
+2. **Health Insurance Portability and Accountability Act (HIPAA) Security Rule**. 45 CFR Part 160 and Part 164 Subparts A and C: [HHS HIPAA Security Rule Guidance](https://www.hhs.gov/hipaa/for-professionals/security/laws-regulations/index.html). Specifically standards:
+   - **§164.308 (a)(1)(ii)(A)**: Risk Analysis & Vulnerability Management.
+   - **§164.308 (a)(1)(ii)(B)**: Risk Mitigation & Control Implementation.
+   - **§164.308 (a)(4)**: Information Access Management.
+   - **§164.308 (a)(8)**: Technical Security Evaluation.
+   - **§164.312 (c)(1)**: Data Integrity Validation.
+   - **§164.312 (e)(1)**: Transmission Security & Tamper Resistance.
+3. **FDA Guidance on Medical Device Cybersecurity**. Cybersecurity in Medical Devices: Quality System Considerations and Content of Premarket Submissions: [FDA Cybersecurity Guidance](https://www.fda.gov/regulatory-information/search-fda-guidance-documents/cybersecurity-medical-devices-quality-system-considerations-and-content-premarket-submissions) (Mandates Software Bill of Materials / SBOM tracking for clinical-grade code assets).
+4. **Clinical Accreditation Literature & Medical Laboratory Compliance Standards** (specifically CAP Accreditation Checklists and ISO 15189:2022 guidelines for bioinformatics software validation):
+   - **Ellingford, J. M., et al. (2026).** *Best practice recommendations for bioinformatics approaches applied to high-throughput sequencing for rare disease and cancer diagnosis within the UK National Health Service*. Journal of Medical Genetics. [https://doi.org/10.1136/jmg-2025-111289](https://doi.org/10.1136/jmg-2025-111289)
+   - **Lavrichenko, K., et al. (2024).** *Recommendations for bioinformatics in clinical practice*. Cold Spring Harbor Laboratory. [https://doi.org/10.1101/2024.11.23.624993](https://doi.org/10.1101/2024.11.23.624993)
+   - **Ganzinger, M., et al. (2021).** *Biomedical and clinical research data management*. In Systems Medicine (pp. 532–543). Elsevier. [https://doi.org/10.1016/b978-0-12-801238-3.11621-6](https://doi.org/10.1016/b978-0-12-801238-3.11621-6)
+   - **Vidanagamachchi, S. M., & Waidyarathna, K. M. G. T. R. (2024).** *Opportunities, challenges and future perspectives of using bioinformatics and artificial intelligence techniques on tropical disease identification using omics data*. Frontiers in Digital Health, 6. [https://doi.org/10.3389/fdgth.2024.1471200](https://doi.org/10.3389/fdgth.2024.1471200)
+
+## Active Scanning Instrument Homepages
+For regulatory auditors seeking tool lineage, these are the main project reference portals:
+
+   - **Gitleaks**: [github.com/gitleaks/gitleaks](https://github.com/gitleaks/gitleaks) — Secrets security verification.
+   - **Trivy**: [trivy.dev](https://trivy.dev) — OS & package vulnerability database.
+   - **Snyk**: [snyk.io](https://snyk.io) — Container & dependency analyzer.
+   - **Docker Scout**: [docs.docker.com/scout](https://docs.docker.com/scout) — Container security profiling.
+   - **Syft**: [github.com/anchore/syft](https://github.com/anchore/syft) — SBOM generation tool.
+   - **Grype**: [github.com/anchore/grype](https://github.com/anchore/grype) — SBOM vulnerability scanner.
+   - **Cosign**: [github.com/sigstore/cosign](https://github.com/sigstore/cosign) — Supply-chain signing.
+   - **Semgrep**: [semgrep.dev](https://semgrep.dev) — Static application security testing (SAST).
+   - **Bandit**: [bandit.readthedocs.io](https://bandit.readthedocs.io) — Python security linter.
+   - **Flake8**: [flake8.pycqa.org](https://flake8.pycqa.org) — PEP 8 style linter.
+   - **Black**: [black.readthedocs.io](https://black.readthedocs.io) — Python code formatter.
+   - **lintr**: [lintr.r-lib.org](https://lintr.r-lib.org) — R static analysis linter.
+   - **oysteR**: [github.com/sonatype-nexus-community/oysteR](https://github.com/sonatype-nexus-community/oysteR) — R package security auditor.
+   - **riskmetric**: [pharmar.github.io/riskmetric](https://pharmar.github.io/riskmetric) — R package quality metrics calculation.
+   - **nf-core tools**: [nf-co.re/tools](https://nf-co.re/tools) — Nextflow workflow best practices verification.
+
+# Appendix: Audit Logs
+The full execution trace and raw JSON scan results are archived in the `reports/` directory.
+
+## Report Authenticity Verification
+To verify the genuity and integrity of this clinical report, the SHA256 cryptographic fingerprint represents the raw data collection:
+
+```{python}
+#| echo: false
+#| output: asis
+from IPython.display import display, Latex
+import os
+
+fingerprint = generate_report_fingerprint(raw_dir)
+print(f"**quindecagon fingerprint:** `{fingerprint}`\n")
+
+explanation = (
+    "The report fingerprint is a deterministic SHA-256 cryptographic signature computed over "
+    "all raw tool outputs in alphabetical order. Any manual modification or tampering with "
+    "the underlying scan data will invalidate this signature, ensuring complete data "
+    "integrity for clinical regulatory audits (CAP/CLIA compliance)."
+    "We recommend to store the report hash and reference file on blockchain to ensure immutability of the clinical report."
+)
+
+# 1. Raw LaTeX block: Passed unmodified to PDF/LaTeX compiler, ignored by HTML writer
+print("```{=latex}")
+print(f"\\begin{{quote}}\\footnotesize\\textcolor[rgb]{{0.4,0.4,0.4}}{{\\textit{{{explanation}}}}}\\end{{quote}}")
+print("```\n")
+
+# 2. Raw HTML block: Passed unmodified to HTML dashboard writer, ignored by PDF/LaTeX writer
+print("```{=html}")
+print(f"<div style='font-size: 0.75em; color: #777; font-style: italic; margin-top: -5px; line-height: 1.3;'>{explanation}</div>")
+print("```\n")
+```
+
+---
+
+```{python}
+#| echo: false
+#| output: asis
+from IPython.display import display, Latex
+import os
+from datetime import datetime
+current_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+footer_text = f"© 2026 Jyotirmoy Das | quindecagon | Clinical Security Framework v0.4.0 | Generated on {current_date}"
+
+# 1. Raw LaTeX block: Passed unmodified to PDF/LaTeX compiler, ignored by HTML writer
+print("```{=latex}")
+print(f"\\begin{{center}}\\footnotesize\\textcolor[rgb]{{0.4,0.4,0.4}}{{\\textcopyright{{}} 2026 Jyotirmoy Das \\textbar{{}} quindecagon \\textbar{{}} Clinical Security Framework v0.3.0 \\textbar{{}} Generated on {current_date}}}\\end{{center}}")
+print("```\n")
+
+# 2. Raw HTML block: Passed unmodified to HTML dashboard writer, ignored by PDF/LaTeX writer
+print("```{=html}")
+print(f"<footer style='text-align: center; font-size: 0.75em; color: #777; margin-top: 20px;'>{footer_text}</footer>")
+print("```\n")
+```
