@@ -1,5 +1,6 @@
 # quindecagon: Clinical Pipeline Integrity & Security Framework
 
+[![quindecagon CI](https://github.com/JD2112/quindecagon/actions/workflows/ci.yml/badge.svg)](https://github.com/JD2112/quindecagon/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/badge/release-0.4.0-007EC6.svg?style=flat-square)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Clinical Compliance](https://img.shields.io/badge/Compliance-CAP%20%2F%20CLIA%20%2F%20HIPAA-7023B0.svg?style=flat-square)](docs/checkers.md)
