@@ -92,6 +92,9 @@ Use the built-in, zero-configuration runner script to automatically build, mount
 ./quindecagon/scripts/docker_run.sh /path/to/your/nextflow-pipeline
 ```
 
+> ⚠️ **Security Note:** Mounting `/var/run/docker.sock` allows the container to communicate with the host's Docker daemon. While this is necessary for `quindecagon` to auto-discover and scan your pipeline's running containers, you should only run the container in environments you trust, as mounting the Docker socket grants the container root-level control over the host's Docker daemon.
+
+
 
 
 ## 📖 Usage
