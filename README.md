@@ -9,6 +9,9 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?style=flat-square&logo=docker&logoColor=white)](Dockerfile)
 [![DOI](https://zenodo.org/badge/1245704159.svg)](https://doi.org/10.5281/zenodo.20590853)
 [![Publish to PyPI](https://github.com/JD2112/quindecagon/actions/workflows/publish-pypi.yml/badge.svg)](https://github.com/JD2112/quindecagon/actions/workflows/publish-pypi.yml)
+[![PyPI](https://img.shields.io/pypi/v/quindecagon.svg?color=blue&style=flat-square)](https://pypi.org/project/quindecagon/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/quindecagon.svg?style=flat-square)](https://pypi.org/project/quindecagon/)
+[![Downloads](https://static.pepy.tech/badge/quindecagon)](https://pepy.tech/project/quindecagon)
 
 #### **Supported Security & Compliance Scanners (15-in-1 Suite):**
 [![nf-core lint](https://img.shields.io/badge/nf--core_lint-Passed-E04C5E?style=flat-square)](https://nf-co.re/)
@@ -77,56 +80,39 @@ quindecagon maps its automated checks directly to regulatory requirements, provi
 * **CAP NGS Checklist**: Validates software integrity, component provenance, and reproducibility.
 * **HIPAA Security Rule**: Ensures risk analysis, data integrity, and transmission security.
 
+## Installation
+
+Install `quindecagon` directly from [PyPI](https://pypi.org/project/quindecagon/):
+
+```bash
+# Standard installation via pip
+pip install quindecagon
+
+# Or directly from GitHub
+pip install git+https://github.com/JD2112/quindecagon.git
+
+# Or run on-the-fly without installing
+pipx run quindecagon init-ci
+```
+
+---
+
 ## Quick Start
 
-### Option A: Run directly (tools installed locally)
+### 1. Initialize Continuous Integration (CI) in any Nextflow Pipeline
+
+Navigate to any Nextflow pipeline repository and run:
 
 ```bash
-# Clone the security suite
-git clone https://github.com/JD2112/quindecagon.git
-cd quindecagon
-
-# Run against your pipeline directory
-./run_all_checks.sh /path/to/your/nextflow-pipeline
-```
-
-### Option B: Run via Docker (recommended)
-
-Use the built-in, zero-configuration runner script to automatically build, mount, and run checks:
-
-```bash
-# Run against a pipeline directory on your host
-./quindecagon/scripts/docker_run.sh /path/to/your/nextflow-pipeline
-```
-
-> **Security Note:** Mounting `/var/run/docker.sock` allows the container to communicate with the host's Docker daemon. While this is necessary for `quindecagon` to auto-discover and scan your pipeline's running containers, you should only run the container in environments you trust, as mounting the Docker socket grants the container root-level control over the host's Docker daemon.
-
-### Option C: Native Continuous Integration (GitHub Actions)
-
-Add Quindecagon auditing and live Shields.io badges to any Nextflow repository.
-
-#### Using the CLI (Automated Setup)
-
-Install `quindecagon` and run `init-ci` in your pipeline repository:
-
-```bash
-# Install Quindecagon
-pip install quindecagon
-# (or directly from GitHub: pip install git+https://github.com/JD2112/quindecagon.git)
-# (or run without installing via: pipx run quindecagon init-ci)
-
-# Navigate to your Nextflow pipeline repo
 cd /path/to/your-pipeline
 
-# Generate workflow & automatically inject dynamic badges into README.md
+# Automatically generate workflow & inject Shields.io badges into README.md
 quindecagon init-ci
 # or
 quindecagon workflow create
 ```
 
-#### Zero-Install Setup (Manual Copy-Paste)
-
-If you prefer **not to install anything locally**, you can simply create `.github/workflows/quindecagon-audit.yml` directly in your repo:
+This creates an ultra-lean 15-line GitHub Actions workflow (`.github/workflows/quindecagon-audit.yml`):
 
 ```yaml
 name: Security & Compliance Audit
@@ -151,7 +137,33 @@ jobs:
       deploy-badges: true
 ```
 
-Whenever commits land on `main` or `dev`, Quindecagon executes inside `jd21/quindecagon:0.4.0`, produces audit artifacts, and publishes updated JSON endpoints to the pipeline's `badges` branch for dynamic Shields.io display.
+Whenever commits land on `main` or `dev`, Quindecagon executes inside `jd21/quindecagon:0.4.0` in root mode, generates dynamic audit JSON endpoints, and commits them to your pipeline's `badges` branch for live Shields.io endpoint display.
+
+> **Zero-Install Alternative:** If you prefer not to install anything locally, you can simply create `.github/workflows/quindecagon-audit.yml` in your repository with the YAML above.
+
+---
+
+### 2. Run Local Audits via Docker (Recommended)
+
+Run a full security and compliance audit against a pipeline directory using the zero-configuration container runner:
+
+```bash
+# Run against a Nextflow pipeline directory
+quindecagon audit /path/to/your/nextflow-pipeline
+# or directly via the helper script
+./quindecagon/scripts/docker_run.sh /path/to/your/nextflow-pipeline
+```
+
+> **Security Note:** Mounting `/var/run/docker.sock` allows the container to communicate with the host's Docker daemon. While this is necessary for `quindecagon` to auto-discover and scan your pipeline's running containers, you should only run the container in environments you trust, as mounting the Docker socket grants the container root-level control over the host's Docker daemon.
+
+---
+
+### 3. Run Directly (Natively Installed Tools)
+
+```bash
+# Run audit directly on host
+./run_all_checks.sh /path/to/your/nextflow-pipeline
+```
 
 
 

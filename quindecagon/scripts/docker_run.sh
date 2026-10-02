@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION="0.3.1"
+VERSION="0.4.0"
 DIGEST=""
 
 if [ -n "$DIGEST" ]; then
@@ -198,7 +198,13 @@ else
     fi
 fi
 
-read -p "Press [Enter] key to continue..."
+ENV_FILE_ARGS=()
+if [ -n "$ENV_FILE" ] && [ -f "$ENV_FILE" ]; then
+    ENV_FILE_ARGS=(--env-file "$ENV_FILE")
+    echo "📄 Using environment file: $ENV_FILE"
+else
+    echo "ℹ️  No .env file found; proceeding with default environment variables."
+fi
 
 docker run --rm -it \
   -v "/var/run/docker.sock:/var/run/docker.sock" \
@@ -209,7 +215,7 @@ docker run --rm -it \
   -v "$PKG_DIR/scripts:/app/scripts" \
   -v "$PKG_DIR/config:/app/config:ro" \
   "${COSIGN_KEY_MOUNT_ARGS[@]}" \
-  --env-file "$ENV_FILE" \
+  "${ENV_FILE_ARGS[@]}" \
   --env "TEXMFVAR=/tmp/texmf-var" \
   --env "TEXMFCACHE=/tmp/texmf-cache" \
   --env "XDG_CACHE_HOME=/tmp/xdg-cache" \

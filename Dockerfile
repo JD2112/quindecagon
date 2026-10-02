@@ -143,6 +143,7 @@ RUN find / -xdev -type f -executable -exec grep -l "Go build ID" {} + | xargs -I
 # 9. Install TinyTeX via Quarto
 RUN quarto install tinytex && \
     mv /root/.TinyTeX /opt/tinytex && \
+    /opt/tinytex/bin/*/tlmgr update --self && \
     /opt/tinytex/bin/*/tlmgr install \
         helvetic psnfss tcolorbox environ trimspaces etoolbox \
         pgf mathpazo booktabs tabu sectsty fancyhdr tipa \

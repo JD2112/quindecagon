@@ -5,8 +5,8 @@ authors:
     given-names: Jyotirmoy
     orcid: https://orcid.org/0000-0002-5649-4658
 title: "quindecagon"
-version: 0.4.0
+version: 0.4.0-release
 identifiers:
   - type: doi
-    value: 10.5281/zenodo.14204261
-date-released: 2026-05-30
+    value: 10.5281/zenodo.20590854
+date-released: 2026-06-08
