@@ -8,6 +8,7 @@
 [![Nextflow](https://img.shields.io/badge/Nextflow-%E2%89%A523.04-4ED8E6.svg?style=flat-square&logo=nextflow&logoColor=black)](https://www.nextflow.io/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?style=flat-square&logo=docker&logoColor=white)](Dockerfile)
 [![DOI](https://zenodo.org/badge/1245704159.svg)](https://doi.org/10.5281/zenodo.20590853)
+[![Publish to PyPI](https://github.com/JD2112/quindecagon/actions/workflows/publish-pypi.yml/badge.svg)](https://github.com/JD2112/quindecagon/actions/workflows/publish-pypi.yml)
 
 #### **Supported Security & Compliance Scanners (15-in-1 Suite):**
 [![nf-core lint](https://img.shields.io/badge/nf--core_lint-Passed-E04C5E?style=flat-square)](https://nf-co.re/)
