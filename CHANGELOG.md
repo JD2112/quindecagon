@@ -20,8 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added top-level `quindecagon` command dispatcher supporting `workflow`, `init-ci`, `audit`, and `report` subcommands alongside existing `quindecagon-audit` and `quindecagon-report`.
 
 ### Fixed
-- **Docker Wrapper Resiliency (`#2`)**: `docker_run.sh` now gracefully handles missing `.env` files rather than aborting, and removed legacy interactive enter prompts.
-- **TinyTeX Installation in Dockerfile (`#3`)**: Added `tlmgr update --self` before installing packages to prevent build failures against updated CTAN repositories.
+- **Docker Wrapper Resiliency (`#1`)**: `docker_run.sh` now gracefully handles missing `.env` files rather than aborting, and removed legacy interactive enter prompts.
+- **TinyTeX Installation in Dockerfile (`#2`)**: Added `tlmgr update --self` before installing packages to prevent build failures against updated CTAN repositories.
 ---
 
 ## [0.4.0] - 2026-05-25
