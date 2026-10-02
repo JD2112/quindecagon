@@ -1,12 +1,13 @@
 # quindecagon: Clinical Pipeline Integrity & Security Framework
 
 [![quindecagon CI](https://github.com/JD2112/quindecagon/actions/workflows/ci.yml/badge.svg)](https://github.com/JD2112/quindecagon/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-0.4.0-007EC6.svg?style=flat-square)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-0.5.0-007EC6.svg?style=flat-square)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Clinical Compliance](https://img.shields.io/badge/Compliance-CAP%20%2F%20CLIA%20%2F%20HIPAA-7023B0.svg?style=flat-square)](docs/checkers.md)
 [![Security Gates](https://img.shields.io/badge/Security%20Gates-15%20Scanners-success.svg?style=flat-square)](#-security-checks)
 [![Nextflow](https://img.shields.io/badge/Nextflow-%E2%89%A523.04-4ED8E6.svg?style=flat-square&logo=nextflow&logoColor=black)](https://www.nextflow.io/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?style=flat-square&logo=docker&logoColor=white)](Dockerfile)
+[![DOI](https://zenodo.org/badge/1245704159.svg)](https://doi.org/10.5281/zenodo.20590853)
 
 #### **Supported Security & Compliance Scanners (15-in-1 Suite):**
 [![nf-core lint](https://img.shields.io/badge/nf--core_lint-Passed-E04C5E?style=flat-square)](https://nf-co.re/)
@@ -26,6 +27,10 @@
 [![riskmetric](https://img.shields.io/badge/riskmetric-Passed-7023B0?style=flat-square)](https://github.com/pharmaR/riskmetric)
 
 ![](images/quindecagon_logo.png)
+
+<p align="center">
+  <img src="images/quindecagon_demo.gif" width="700" alt="quindecagon Terminal Demo">
+</p>
 
 **quindecagon** is a specialized security and compliance audit framework designed specifically for clinical Nextflow pipelines. By leveraging 15 distinct security and quality-assurance instruments, quindecagon ensures that your bioinformatics workflows are deterministic, secure, and ready for clinical validation.
 
@@ -71,7 +76,7 @@ quindecagon maps its automated checks directly to regulatory requirements, provi
 * **CAP NGS Checklist**: Validates software integrity, component provenance, and reproducibility.
 * **HIPAA Security Rule**: Ensures risk analysis, data integrity, and transmission security.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Option A: Run directly (tools installed locally)
 
@@ -93,12 +98,64 @@ Use the built-in, zero-configuration runner script to automatically build, mount
 ./quindecagon/scripts/docker_run.sh /path/to/your/nextflow-pipeline
 ```
 
-> ⚠️ **Security Note:** Mounting `/var/run/docker.sock` allows the container to communicate with the host's Docker daemon. While this is necessary for `quindecagon` to auto-discover and scan your pipeline's running containers, you should only run the container in environments you trust, as mounting the Docker socket grants the container root-level control over the host's Docker daemon.
+> **Security Note:** Mounting `/var/run/docker.sock` allows the container to communicate with the host's Docker daemon. While this is necessary for `quindecagon` to auto-discover and scan your pipeline's running containers, you should only run the container in environments you trust, as mounting the Docker socket grants the container root-level control over the host's Docker daemon.
+
+### Option C: Native Continuous Integration (GitHub Actions)
+
+Add Quindecagon auditing and live Shields.io badges to any Nextflow repository.
+
+#### Using the CLI (Automated Setup)
+
+Install `quindecagon` and run `init-ci` in your pipeline repository:
+
+```bash
+# Install Quindecagon
+pip install quindecagon
+# (or directly from GitHub: pip install git+https://github.com/JD2112/quindecagon.git)
+# (or run without installing via: pipx run quindecagon init-ci)
+
+# Navigate to your Nextflow pipeline repo
+cd /path/to/your-pipeline
+
+# Generate workflow & automatically inject dynamic badges into README.md
+quindecagon init-ci
+# or
+quindecagon workflow create
+```
+
+#### Zero-Install Setup (Manual Copy-Paste)
+
+If you prefer **not to install anything locally**, you can simply create `.github/workflows/quindecagon-audit.yml` directly in your repo:
+
+```yaml
+name: Security & Compliance Audit
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  quindecagon-audit:
+    name: 'Quindecagon Audit'
+    uses: JD2112/quindecagon/.github/workflows/pipeline-audit.yml@main
+    permissions:
+      contents: write
+    with:
+      deploy-badges: true
+```
+
+Whenever commits land on `main` or `dev`, Quindecagon executes inside `jd21/quindecagon:0.4.0`, produces audit artifacts, and publishes updated JSON endpoints to the pipeline's `badges` branch for dynamic Shields.io display.
 
 
 
 
-## 📖 Usage
+## Usage
 
 ```
 ./quindecagon/scripts/docker_run.sh [skip-options] <TARGET_DIR>
@@ -143,10 +200,10 @@ If found, it is securely mounted as `/app/cosign.pub:ro` inside the container sa
 
 ```
 ========================================
-🎯 Target pipeline:  /target
-📁 Reports saved to: /app/reports/your-pipeline_2026-04-30_09-20
+Target pipeline:  /target
+Reports saved to: /app/reports/your-pipeline_2026-04-30_09-20
 ========================================
-🐳 Auto-discovered 15 container images:
+Auto-discovered 15 container images:
    • quay.io/biocontainers/multiqc:1.33--pyhdfd78af_0
    • ...
 ========================================
@@ -154,7 +211,7 @@ If found, it is securely mounted as `/app/cosign.pub:ro` inside the container sa
 
 ---
 
-## 🔍 Security Checks
+## Security Checks
 
 The suite runs **13 automated checks** across code quality, bioinformatic scripts security, container security, and supply chain integrity:
 
@@ -177,7 +234,7 @@ The suite runs **13 automated checks** across code quality, bioinformatic script
 ### Graceful Degradation
 Every check is **optional**. If a tool isn't installed, the check is skipped with a `⚠️` warning and a `skipped` status in the JSON report. The remaining checks continue to run.
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 quindecagon/
@@ -212,7 +269,7 @@ quindecagon/
         └── final/
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 All settings are in [`config/config.env`](config/config.env):
 
@@ -236,16 +293,6 @@ DOCKER_SCOUT_THRESHOLD="high"
 > ./run_all_checks.sh /path/to/your/nextflow-pipeline your-registry/your-pipeline:1.1.0
 > ```
 
-## 🐳 Docker Container
-
-The container is built on **Ubuntu 24.04 LTS** and includes all security tools pre-installed:
-
-### Build
-
-```bash
-docker build -t jd21/quindecagon:0.4.0 .
-```
-
 ### Hardening Features
 
 - **Base Image**: Ubuntu 24.04 LTS with `apt-get upgrade` for latest OS patches
@@ -260,7 +307,7 @@ docker build -t jd21/quindecagon:0.4.0 .
 | `SNYK_TOKEN`   | Required for Snyk authentication         |
 | `DOCKER_HOST`  | Set automatically when mounting Docker socket |
 
-## 🔐 Image Signing
+## Image Signing
 
 ### Sign your images (batch)
 
@@ -278,11 +325,11 @@ cosign verify --key cosign.pub your-registry/your-pipeline:1.1.0
 ```
 
 A successful verification confirms:
-- ✅ The image was signed by the holder of `cosign.key`
-- ✅ The image contents have not been tampered with since signing
-- ✅ The digest matches the exact bytes that were approved
+- The image was signed by the holder of `cosign.key`
+- The image contents have not been tampered with since signing
+- The digest matches the exact bytes that were approved
 
-## 📊 Reports
+## Reports
 
 Reports are saved inside the **security suite directory** — never inside the target pipeline. Each run creates a unique, timestamped folder namespaced by the pipeline name:
 
@@ -310,54 +357,14 @@ quindecagon/reports/
 
 > **Why?** This prevents accidental overwrites if the target pipeline already has a `reports/` directory (e.g., MultiQC, Nextflow traces). Your pipeline code is never modified by the security scanner.
 
-## 🧪 Example Workflow
 
-```bash
-# 1. Build the security container
-docker build -t jd21/quindecagon:0.4.0 .
-
-# 2. Run a full audit on your Nextflow pipeline
-docker run --rm -it \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /path/to/your/nextflow-pipeline:/target \
-  -e SNYK_TOKEN=$SNYK_TOKEN \
-  jd21/quindecagon:0.4.0 \
-  bash run_all_checks.sh /target your-registry/your-pipeline:1.1.0
-
-# 3. Check the reports
-open reports/your-pipeline_2026-04-30_14-20/final/report.html
-
-# 4. Sign your images after a clean audit
-./scripts/sign_images.sh
-
-# 5. Verify signatures
-cosign verify --key cosign.pub your-registry/your-pipeline:1.1.0
-```
-
-## 📋 Prerequisites
-
-If running **without Docker**, ensure the following are installed:
-
-| Tool        | Install Command                              |
-|-------------|----------------------------------------------|
-| Nextflow    | `curl -s https://get.nextflow.io \| bash`    |
-| nf-core     | `pip install nf-core`                        |
-| Trivy       | [trivy.dev](https://trivy.dev)               |
-| Snyk        | [snyk.io](https://snyk.io/product/snyk-cli/) |
-| Syft        | `curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \| sh` |
-| Grype       | `curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \| sh` |
-| Cosign      | [sigstore.dev](https://docs.sigstore.dev/cosign/system_config/installation/) |
-| Semgrep     | `pip install semgrep`                        |
-| Docker Scout| Built into Docker Desktop                    |
-| jq          | `brew install jq` / `apt install jq`        |
-| Quarto      | [quarto.org](https://quarto.org/docs/download/) |
-
-> **Note:** All tools are **optional**. Missing tools are gracefully skipped.
-
-
-## 📄 License & Attribution
+## License & Attribution
 Licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
 Developed and maintained by **Jyotirmoy Das**.
+
+## Citations
+
+Das, J. (2026). quindecagon (0.4.0-release). Zenodo. https://doi.org/10.5281/zenodo.20590854
 
 ## Acknowledgments
 

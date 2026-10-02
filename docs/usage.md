@@ -97,3 +97,54 @@ Once raw logs are generated in `reports/raw/`, compile the HTML dashboard and ty
 ```bash
 ./quindecagon/scripts/generate_local.sh reports/latest_run_folder
 ```
+
+---
+
+## 4. GitHub Actions CI/CD Integration
+
+To automatically audit pipelines on push/pull request and display dynamic Shields.io status badges in your pipeline's `README.md`:
+
+### Automated Setup (CLI)
+
+```bash
+# Install Quindecagon
+pip install quindecagon
+# (or directly from GitHub: pip install git+https://github.com/JD2112/quindecagon.git)
+# (or run without installing via: pipx run quindecagon init-ci)
+
+# In your target pipeline repository:
+quindecagon init-ci
+# or
+quindecagon workflow create
+```
+
+### Zero-Install Setup (Manual)
+
+If you prefer not to install Quindecagon locally, simply create `.github/workflows/quindecagon-audit.yml`:
+
+This generates `.github/workflows/quindecagon-audit.yml`:
+
+```yaml
+name: Security & Compliance Audit
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  quindecagon-audit:
+    name: 'Quindecagon Audit'
+    uses: JD2112/quindecagon/.github/workflows/pipeline-audit.yml@main
+    permissions:
+      contents: write
+    with:
+      deploy-badges: true
+```
+
+The workflow runs Quindecagon inside `jd21/quindecagon:0.4.0` in root mode, generates dynamic JSON endpoints, and commits them to the target repo's `badges` branch for live Shields.io endpoint badges.

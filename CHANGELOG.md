@@ -4,6 +4,21 @@ All notable changes to the **quindecagon** Clinical Pipeline Integrity & Securit
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to Semantic Versioning.
 
+## [0.5.0] - 2026-10-02
+
+### Added
+- **Native CI Workflow Generation & Setup CLI**:
+  - Added `quindecagon workflow create` and `quindecagon init-ci` commands to automatically generate GitHub Actions workflows for downstream Nextflow repositories.
+  - Added automatic detection of GitHub repository metadata (`owner/repo`) from `git remote` or `nextflow.config` (`manifest.name`).
+  - Added automated, idempotent injection of 7 dynamic Shields.io badge endpoints into downstream repository `README.md` files.
+- **Centralized GitHub Actions Reusable Workflow**:
+  - Implemented `.github/workflows/pipeline-audit.yml` callable across any bioinformatics pipeline (`uses: JD2112/quindecagon/.github/workflows/pipeline-audit.yml@main`).
+  - Supports configurable container images, badges branch targets, artifact uploads, and dynamic badge deployment without code drift.
+- **Automated PyPI Publishing Workflow**:
+  - Added `.github/workflows/publish-pypi.yml` supporting Trusted Publishing (OIDC) and tag releases.
+- **Unified CLI Entrypoint**:
+  - Added top-level `quindecagon` command dispatcher supporting `workflow`, `init-ci`, `audit`, and `report` subcommands alongside existing `quindecagon-audit` and `quindecagon-report`.
+
 ---
 
 ## [0.4.0] - 2026-05-25
